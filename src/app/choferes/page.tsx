@@ -15,7 +15,7 @@ import {
   Chofer,
 } from "@/lib/firestore/choferes";
 import { Box, Button, Paper, Stack, TextField, Typography, Alert } from "@mui/material";
-import { DataGrid, GridColDef } from "@mui/x-data-grid";
+import { DataGrid, GridColDef, GridValueGetterParams } from "@mui/x-data-grid";
 import ChoferDialog, { ChoferFormData } from "@/components/choferes/ChoferDialog";
 import MountedGuard from "@/components/system/MountedGuard";
 import { useAuth } from "@/context/AuthContext";
@@ -185,7 +185,7 @@ export default function ChoferesPage() {
       headerName: "Autobús asignado",
       flex: 1,
       minWidth: 170,
-      valueGetter: (params) => {
+      valueGetter: (params: GridValueGetterParams) => {
         const autobusId = params?.row?.autobusId;
 
         if (!autobusId || !Array.isArray(autobuses)) {
