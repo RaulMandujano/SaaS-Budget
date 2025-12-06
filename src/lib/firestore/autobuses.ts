@@ -24,6 +24,7 @@ export interface Autobus {
   marca: string;
   modelo: string;
   anio: number;
+  capacidad: number;
   estado: EstadoAutobus;
   createdAt?: Date | null;
 }
@@ -62,6 +63,7 @@ export const obtenerAutobuses = async (empresaIdParam?: string): Promise<Autobus
         marca: data.marca ?? "",
         modelo: data.modelo ?? "",
         anio: Number(data.anio ?? 0),
+        capacidad: Number(data.capacidad ?? 0),
         estado: (data.estado ?? "activo") as EstadoAutobus,
         createdAt: data.createdAt?.toDate?.() ?? null,
       };
