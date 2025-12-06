@@ -8,6 +8,7 @@ import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import MountedGuard from "@/components/system/MountedGuard";
 import { useAuth } from "@/context/AuthContext";
 import { actualizarEmpresa, crearEmpresa, Empresa, obtenerEmpresas, PlanEmpresa } from "@/lib/firestore/empresas";
+import { formatearFecha } from "@/lib/fechas";
 
 export default function EmpresasPage() {
   const { rol } = useAuth();
@@ -78,7 +79,7 @@ export default function EmpresasPage() {
         nombre: emp.nombre,
         plan: emp.plan,
         activo: emp.activo ? "Activa" : "Inactiva",
-        fecha: emp.fechaCreacion ? emp.fechaCreacion.toLocaleDateString("es-MX") : "—",
+        fecha: emp.fechaCreacion ? formatearFecha(emp.fechaCreacion, "—") : "—",
         original: emp,
       })),
     [empresas],

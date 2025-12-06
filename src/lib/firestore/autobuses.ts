@@ -1,16 +1,19 @@
-import { db } from "@/lib/firebase";
 import {
   collection,
-  addDoc,
   getDocs,
+  addDoc,
+  doc,
   updateDoc,
   deleteDoc,
-  doc,
-  serverTimestamp,
   query,
   where,
+  orderBy,
   limit,
+  Timestamp,
+  DocumentData,
+  QueryDocumentSnapshot,
 } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { asegurarEmpresaId } from "@/lib/firestore/empresas";
 
 export type EstadoAutobus = "activo" | "mantenimiento" | "fuera_servicio";
@@ -29,69 +32,71 @@ export interface Autobus {
   createdAt?: Date | null;
 }
 
+const mapAutobus = (docSnap: QueryDocumentSnapshot<DocumentData>): Autobus => {
+  const data = docSnap.data();
+  const createdAtRaw = data.createdAt;
+  const createdAt =
+    createdAtRaw instanceof Timestamp ? createdAtRaw.toDate() : createdAtRaw?.toDate?.() ?? null;
+
+  return {
+    id: docSnap.id,
+    sucursalId: data.sucursalId ?? "",
+    empresaId: data.empresaId ?? "",
+    numeroUnidad: data.numeroUnidad ?? "",
+    placa: data.placa ?? "",
+    marca: data.marca ?? "",
+    modelo: data.modelo ?? "",
+    anio: Number(data.anio ?? 0),
+    capacidad: Number(data.capacidad ?? 0),
+    estado: (data.estado as EstadoAutobus) ?? "activo",
+    createdAt,
+  };
+};
+
+export const obtenerAutobuses = async (empresaIdParam?: string): Promise<Autobus[]> => {
+  const empresaId = asegurarEmpresaId(empresaIdParam);
+  const q = query(
+    collection(db, "autobuses"),
+    where("empresaId", "==", empresaId),
+    limit(300),
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(mapAutobus).sort((a, b) => {
+    const aTime = a.createdAt?.getTime?.() ?? 0;
+    const bTime = b.createdAt?.getTime?.() ?? 0;
+    return bTime - aTime;
+  });
+};
+
 export const crearAutobus = async (
   autobus: Omit<Autobus, "id" | "createdAt" | "empresaId">,
   empresaIdParam?: string,
 ): Promise<string> => {
   const empresaId = asegurarEmpresaId(empresaIdParam);
-  const ref = await addDoc(collection(db, "autobuses"), {
+  const payload = {
     ...autobus,
     empresaId,
-    createdAt: serverTimestamp(),
-  });
+    anio: Number(autobus.anio) || 0,
+    capacidad: Number(autobus.capacidad) || 0,
+    estado: autobus.estado ?? "activo",
+    createdAt: Timestamp.now(),
+  };
+  const ref = await addDoc(collection(db, "autobuses"), payload);
   return ref.id;
-};
-
-export const obtenerAutobuses = async (empresaIdParam?: string): Promise<Autobus[]> => {
-  try {
-    const empresaId = asegurarEmpresaId(empresaIdParam);
-    const q = query(
-      collection(db, "autobuses"),
-      where("empresaId", "==", empresaId),
-      limit(300),
-    );
-    const snapshot = await getDocs(q);
-
-    const registros = snapshot.docs.map((registro) => {
-      const data = registro.data();
-      return {
-        id: registro.id,
-        sucursalId: data.sucursalId ?? "",
-        empresaId: data.empresaId ?? "",
-        numeroUnidad: data.numeroUnidad ?? "",
-        placa: data.placa ?? "",
-        marca: data.marca ?? "",
-        modelo: data.modelo ?? "",
-        anio: Number(data.anio ?? 0),
-        capacidad: Number(data.capacidad ?? 0),
-        estado: (data.estado ?? "activo") as EstadoAutobus,
-        createdAt: data.createdAt?.toDate?.() ?? null,
-      };
-    });
-
-    registros.sort(
-      (a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0),
-    );
-
-    const sinEmpresa = snapshot.docs.filter((d) => !d.data().empresaId);
-    if (sinEmpresa.length > 0) {
-      await Promise.all(
-        sinEmpresa.map((docSnap) => updateDoc(doc(db, "autobuses", docSnap.id), { empresaId })),
-      );
-    }
-
-    return registros;
-  } catch (error) {
-    console.warn("Error al obtener autobuses", error);
-    return [];
-  }
 };
 
 export const actualizarAutobus = async (
   id: string,
-  datos: Partial<Omit<Autobus, "id" | "createdAt">>,
+  datos: Partial<Omit<Autobus, "id">>,
 ): Promise<void> => {
-  await updateDoc(doc(db, "autobuses", id), datos);
+  const payload = { ...datos } as Record<string, unknown>;
+  if (typeof datos.anio !== "undefined") {
+    payload.anio = Number(datos.anio) || 0;
+  }
+  if (typeof datos.capacidad !== "undefined") {
+    payload.capacidad = Number(datos.capacidad) || 0;
+  }
+  await updateDoc(doc(db, "autobuses", id), payload);
 };
 
 export const eliminarAutobus = async (id: string): Promise<void> => {

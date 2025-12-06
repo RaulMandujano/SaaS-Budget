@@ -7,6 +7,7 @@ import ProtectedLayout from "@/components/layout/ProtectedLayout";
 import PanelLayout from "@/components/layout/PanelLayout";
 import ProtectedRoute from "@/components/system/ProtectedRoute";
 import MountedGuard from "@/components/system/MountedGuard";
+import { formatearFechaHora } from "@/lib/fechas";
 import {
   Box,
   Paper,
@@ -90,7 +91,7 @@ export default function AuditoriaPage() {
       })
       .map((ev) => ({
         id: ev.id,
-        fecha: ev.fecha ? ev.fecha.toLocaleString("es-MX") : "Sin fecha",
+        fecha: formatearFechaHora(ev.fecha, "Sin fecha"),
         usuario: `${ev.usuarioNombre} (${ev.usuarioEmail || "sin email"})`,
         rol: ev.rol,
         modulo: ev.modulo,

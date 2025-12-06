@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, createElement, useContext, useEffect, useState, type ReactNode } from "react";
-import { db, storage } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import {
   doc,
   getDoc,
@@ -11,7 +11,7 @@ import {
   Timestamp,
   Unsubscribe,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
 
 export interface ConfiguracionGeneral {
   nombreEmpresa: string;
@@ -93,6 +93,7 @@ export const suscribirseConfiguracion = (
 
 export const subirLogoConfiguracion = async (archivo: File): Promise<string> => {
   const extension = archivo.name.split(".").pop() || "png";
+  const storage = getStorage();
   const referencia = ref(storage, `configuracion/logo-${Date.now()}.${extension}`);
   const resultado = await uploadBytes(referencia, archivo);
   return getDownloadURL(resultado.ref);

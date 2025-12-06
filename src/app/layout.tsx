@@ -1,20 +1,15 @@
-import type { Metadata } from "next";
+import MountedGuard from "@/components/system/MountedGuard";
 import ClientWrapper from "@/components/system/ClientWrapper";
 
-export const metadata: Metadata = {
-  title: "Panel Estrella Polar",
-  description: "Panel de administración Estrella Polar",
-};
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body>
-        <ClientWrapper>{children}</ClientWrapper>
+      <body suppressHydrationWarning>
+        <ClientWrapper>
+          <MountedGuard>
+            {children}
+          </MountedGuard>
+        </ClientWrapper>
       </body>
     </html>
   );

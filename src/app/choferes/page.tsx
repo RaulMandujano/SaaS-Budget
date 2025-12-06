@@ -159,7 +159,9 @@ export default function ChoferesPage() {
   };
 
   const eliminarChoferHandler = async (row: ChoferRow) => {
-    const confirmar = window.confirm("¿Seguro que deseas eliminar este chofer?");
+    const confirmar = typeof window !== "undefined"
+      ? window.confirm("¿Seguro que deseas eliminar este chofer?")
+      : false;
     if (!confirmar) return;
     try {
       await eliminarChofer(row.id);

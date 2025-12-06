@@ -13,13 +13,18 @@ export interface ErrorSistemaPayload {
   usuarioId?: string | null;
 }
 
+function getSafeRuta() {
+  if (typeof window === "undefined") return null;
+  return window.location.pathname;
+}
+
 export const registrarError = async (payload: ErrorSistemaPayload) => {
   try {
     const usuarioId = payload.usuarioId ?? auth.currentUser?.uid ?? null;
     await addDoc(collection(db, "erroresSistema"), {
       mensaje: payload.mensaje,
       stack: payload.stack || null,
-      ruta: payload.ruta || (typeof window !== "undefined" ? window.location.pathname : null),
+      ruta: payload.ruta || getSafeRuta(),
       usuarioId,
       fecha: serverTimestamp(),
     });
@@ -32,7 +37,7 @@ const handleErrorEvent = (event: ErrorEvent) => {
   registrarError({
     mensaje: event.message || "Error no especificado",
     stack: event.error?.stack || null,
-    ruta: typeof window !== "undefined" ? window.location.pathname : undefined,
+    ruta: getSafeRuta() || undefined,
   });
 };
 
@@ -41,12 +46,14 @@ const handleRejectionEvent = (event: PromiseRejectionEvent) => {
   registrarError({
     mensaje: reason?.message || "Rechazo de promesa sin mensaje",
     stack: reason?.stack || JSON.stringify(reason),
-    ruta: typeof window !== "undefined" ? window.location.pathname : undefined,
+    ruta: getSafeRuta() || undefined,
   });
 };
 
 export const registrarErrorGlobal = () => {
-  if (listenersInstalados || typeof window === "undefined") return;
+  if (listenersInstalados) return;
+  if (typeof window === "undefined") return;
+
   window.addEventListener("error", handleErrorEvent);
   window.addEventListener("unhandledrejection", handleRejectionEvent);
   listenersInstalados = true;

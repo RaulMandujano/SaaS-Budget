@@ -106,7 +106,9 @@ export default function AutobusesPage() {
             color="error"
             size="small"
             onClick={async () => {
-              const confirmar = window.confirm("¿Seguro que deseas eliminar este autobús?");
+              const confirmar = typeof window !== "undefined"
+                ? window.confirm("¿Seguro que deseas eliminar este autobús?")
+                : false;
               if (!confirmar) return;
               try {
                 await eliminarAutobus(params.row.id);

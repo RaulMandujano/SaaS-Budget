@@ -1,16 +1,19 @@
-import { db } from "@/lib/firebase";
 import {
-  addDoc,
   collection,
-  deleteDoc,
-  doc,
   getDocs,
-  limit,
-  query,
-  serverTimestamp,
+  addDoc,
+  doc,
   updateDoc,
+  deleteDoc,
+  query,
   where,
+  orderBy,
+  limit,
+  Timestamp,
+  DocumentData,
+  QueryDocumentSnapshot,
 } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { asegurarEmpresaId } from "@/lib/firestore/empresas";
 
 export type EstadoChofer = "Activo" | "Suspendido";
@@ -26,60 +29,38 @@ export interface Chofer {
   createdAt?: Date | null;
 }
 
-const mapearChofer = (registro: any): Chofer => {
-  const data = registro.data();
+const mapChofer = (docSnap: QueryDocumentSnapshot<DocumentData>): Chofer => {
+  const data = docSnap.data();
+  const createdAtRaw = data.createdAt;
+  const createdAt =
+    createdAtRaw instanceof Timestamp ? createdAtRaw.toDate() : createdAtRaw?.toDate?.() ?? null;
   const estado: EstadoChofer = data.estado === "Suspendido" ? "Suspendido" : "Activo";
+
   return {
-    id: registro.id,
+    id: docSnap.id,
     nombre: data.nombre ?? "",
     licencia: data.licencia ?? "",
     telefono: data.telefono ?? "",
     autobusId: data.autobusId ?? "",
     empresaId: data.empresaId ?? "",
     estado,
-    createdAt: data.createdAt?.toDate?.() ?? null,
+    createdAt,
   };
 };
 
-const migrarChoferesSinEmpresa = async (empresaId: string) => {
-  try {
-    const snap = await getDocs(query(collection(db, "choferes"), limit(50)));
-    const sinEmpresa = snap.docs.filter((d) => !d.data().empresaId);
-    await Promise.all(
-      sinEmpresa.map((docSnap) => updateDoc(doc(db, "choferes", docSnap.id), { empresaId })),
-    );
-  } catch (error) {
-    console.warn("No se pudieron migrar choferes sin empresaId", error);
-  }
-};
-
 export const obtenerChoferes = async (empresaIdParam?: string): Promise<Chofer[]> => {
-  try {
-    const empresaId = asegurarEmpresaId(empresaIdParam);
-    const q = query(
-      collection(db, "choferes"),
-      where("empresaId", "==", empresaId),
-      limit(300),
-    );
-    const snapshot = await getDocs(q);
-    const lista = snapshot.docs.map(mapearChofer);
-
-    lista.sort((a, b) => (b.createdAt?.getTime?.() ?? 0) - (a.createdAt?.getTime?.() ?? 0));
-
-    const sinEmpresa = snapshot.docs.filter((d) => !d.data().empresaId);
-    if (sinEmpresa.length > 0) {
-      await Promise.all(
-        sinEmpresa.map((docSnap) => updateDoc(doc(db, "choferes", docSnap.id), { empresaId })),
-      );
-    } else if (lista.length === 0) {
-      await migrarChoferesSinEmpresa(empresaId);
-    }
-
-    return lista;
-  } catch (error) {
-    console.warn("Error al obtener choferes", error);
-    return [];
-  }
+  const empresaId = asegurarEmpresaId(empresaIdParam);
+  const q = query(
+    collection(db, "choferes"),
+    where("empresaId", "==", empresaId),
+    limit(300),
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(mapChofer).sort((a, b) => {
+    const aTime = a.createdAt?.getTime?.() ?? 0;
+    const bTime = b.createdAt?.getTime?.() ?? 0;
+    return bTime - aTime;
+  });
 };
 
 export const crearChofer = async (
@@ -87,18 +68,19 @@ export const crearChofer = async (
   empresaIdParam?: string,
 ): Promise<string> => {
   const empresaId = asegurarEmpresaId(empresaIdParam);
-  const ref = await addDoc(collection(db, "choferes"), {
+  const payload = {
     ...chofer,
     empresaId,
     estado: chofer.estado ?? "Activo",
-    createdAt: serverTimestamp(),
-  });
+    createdAt: Timestamp.now(),
+  };
+  const ref = await addDoc(collection(db, "choferes"), payload);
   return ref.id;
 };
 
 export const actualizarChofer = async (
   id: string,
-  data: Partial<Omit<Chofer, "id" | "empresaId" | "createdAt">>,
+  data: Partial<Omit<Chofer, "id">>,
 ): Promise<void> => {
   await updateDoc(doc(db, "choferes", id), data);
 };

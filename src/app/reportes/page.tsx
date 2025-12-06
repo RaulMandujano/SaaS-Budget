@@ -25,6 +25,7 @@ import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import MountedGuard from "@/components/system/MountedGuard";
 import type { WorkBook } from "xlsx";
 import { aplicarImpuesto, formatearMoneda, useConfiguracion } from "@/lib/configuracion/configuracion";
+import { formatearFecha } from "@/lib/fechas";
 
 const categorias = ["Todas", "Combustible", "Mantenimiento", "Peajes", "Sueldos", "Otros"];
 
@@ -41,6 +42,7 @@ export default function ReportesPage() {
   const [sucursalFiltro, setSucursalFiltro] = useState("todas");
   const [autobusFiltro, setAutobusFiltro] = useState("todos");
   const [categoriaFiltro, setCategoriaFiltro] = useState("Todas");
+  const [archivoExcel, setArchivoExcel] = useState<Blob | null>(null);
 
   const [aplicarFiltros, setAplicarFiltros] = useState(false);
   const [correoDestino, setCorreoDestino] = useState("");
@@ -100,7 +102,7 @@ export default function ReportesPage() {
   const filas = useMemo(() => {
     return gastosFiltrados.map((gasto) => ({
       id: gasto.id,
-      fecha: gasto.fecha ? gasto.fecha.toLocaleDateString("es-MX") : "Sin fecha",
+      fecha: formatearFecha(gasto.fecha),
       concepto: gasto.descripcion,
       categoria: gasto.tipo,
       monto: formatearMoneda(aplicarImpuesto(gasto.monto, configuracion), configuracion),
@@ -127,13 +129,20 @@ export default function ReportesPage() {
     const libro: WorkBook = { SheetNames: ["Reporte"], Sheets: { Reporte: hoja } };
     const buffer = XLSX.write(libro, { bookType: "xlsx", type: "array" });
     const blob = new Blob([buffer], { type: "application/octet-stream" });
-    const url = window.URL.createObjectURL(blob);
+    setArchivoExcel(blob);
+  };
+
+  useEffect(() => {
+    if (!archivoExcel) return;
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    const url = window.URL.createObjectURL(archivoExcel);
     const link = document.createElement("a");
     link.href = url;
     link.download = "reporte-gastos.xlsx";
     link.click();
     window.URL.revokeObjectURL(url);
-  };
+    setArchivoExcel(null);
+  }, [archivoExcel]);
 
   const crearDocumentoPdf = async () => {
     const jsPDF = (await import("jspdf")).default;

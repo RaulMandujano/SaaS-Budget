@@ -35,6 +35,7 @@ import SucursalDialog, {
 import MountedGuard from "@/components/system/MountedGuard";
 import { useAuth } from "@/context/AuthContext";
 import { registrarEventoAuditoria } from "@/lib/auditoria/registrarEvento";
+import { formatearFecha } from "@/lib/fechas";
 
 export default function SucursalesPage() {
   const router = useRouter();
@@ -114,9 +115,9 @@ export default function SucursalesPage() {
             color="error"
             size="small"
             onClick={async () => {
-              const confirmar = window.confirm(
-                "¿Seguro que deseas eliminar esta sucursal?",
-              );
+              const confirmar = typeof window !== "undefined"
+                ? window.confirm("¿Seguro que deseas eliminar esta sucursal?")
+                : false;
               if (!confirmar) return;
 
               try {
@@ -158,9 +159,7 @@ export default function SucursalesPage() {
         ciudad: s.ciudad,
         encargado: (s as any).encargado || "No asignado",
         telefono: (s as any).telefono || "—",
-        fecha: s.createdAt
-          ? s.createdAt.toLocaleDateString("es-MX")
-          : "Sin fecha",
+        fecha: formatearFecha(s.createdAt),
       }))
       .filter((row) =>
         [row.nombre, row.ciudad, row.encargado, row.telefono, row.fecha]

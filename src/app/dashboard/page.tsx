@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import MountedGuard from "@/components/system/MountedGuard";
 import ProtectedLayout from "@/components/layout/ProtectedLayout";
 import PanelLayout from "@/components/layout/PanelLayout";
 import { obtenerTotalesSistema } from "@/lib/reportes/metricas";
@@ -22,7 +23,6 @@ import {
   ArcElement,
 } from "chart.js";
 import { Bar, Doughnut } from "react-chartjs-2";
-import MountedGuard from "@/components/system/MountedGuard";
 import { aplicarImpuesto, formatearMoneda, useConfiguracion } from "@/lib/configuracion/configuracion";
 import { useAuth } from "@/context/AuthContext";
 
@@ -214,7 +214,9 @@ export default function DashboardPage() {
     [],
   );
 
-  const contenido = (
+  const contenido = cargando ? (
+    <Box p={4}>Cargando...</Box>
+  ) : (
     <Box sx={{ minHeight: "100vh", backgroundColor: "#f7f8fc", py: 3 }}>
       <Container maxWidth="lg">
         {/* Hero */}
@@ -381,22 +383,12 @@ export default function DashboardPage() {
     </Box>
   );
 
-  if (cargando) {
-    return (
-      <MountedGuard>
-        <ProtectedLayout>
-          <PanelLayout>
-            <Box p={4}>Cargando...</Box>
-          </PanelLayout>
-        </ProtectedLayout>
-      </MountedGuard>
-    );
-  }
-
   return (
     <MountedGuard>
       <ProtectedLayout>
-        <PanelLayout>{contenido}</PanelLayout>
+        <PanelLayout>
+          {contenido}
+        </PanelLayout>
       </ProtectedLayout>
     </MountedGuard>
   );

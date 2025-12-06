@@ -1,10 +1,9 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
-import { crearEmpresa, establecerEmpresaActual, PlanEmpresa } from "@/lib/firestore/empresas";
+import { doc, getDoc } from "firebase/firestore";
 
 export type RolUsuario = "admin" | "finanzas" | "operaciones" | "superadmin";
 
@@ -20,6 +19,8 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   cambiarEmpresaActual: (id: string) => void;
 }
+
+const EMPRESA_STORAGE_KEY = "empresaActualId";
 
 const AuthContextWithSetter = createContext<AuthContextValue>({
   usuario: null,
@@ -42,14 +43,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   const cambiarEmpresaActual = useCallback((empresaId: string) => {
-    establecerEmpresaActual(empresaId);
     setEstado((prev) => ({ ...prev, empresaActualId: empresaId }));
   }, []);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        establecerEmpresaActual("");
         setEstado({
           usuario: null,
           rol: null,
@@ -58,99 +57,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           empresaId: null,
           empresaActualId: null,
         });
+        if (typeof window !== "undefined") {
+          localStorage.removeItem(EMPRESA_STORAGE_KEY);
+        }
         return;
       }
+
+      let rol: RolUsuario | null = null;
+      let activo = true;
+      let empresaId: string | null = null;
 
       try {
         const ref = doc(db, "usuarios", user.uid);
         const snap = await getDoc(ref);
-        if (!snap.exists()) {
-          const nuevaEmpresaId = await crearEmpresa({
-            nombre: user.displayName ?? "Empresa",
-            plan: "enterprise",
-            activo: true,
-          });
-          await setDoc(ref, {
-            nombre: user.displayName ?? "Usuario",
-            email: user.email,
-            rol: "admin",
-            activo: true,
-            empresaId: nuevaEmpresaId,
-            plan: "enterprise" as PlanEmpresa,
-            fechaCreacion: serverTimestamp(),
-          });
-          establecerEmpresaActual(nuevaEmpresaId);
-          setEstado({
-            usuario: user,
-            rol: "admin",
-            activo: true,
-            cargando: false,
-            empresaId: nuevaEmpresaId,
-            empresaActualId: nuevaEmpresaId,
-          });
-          return;
+        if (snap.exists()) {
+          const data = snap.data();
+          rol = (data.rol as RolUsuario | undefined) ?? null;
+          activo = data.activo !== false;
+          empresaId = (data.empresaId as string | undefined) || null;
         }
-
-        const data = snap.data();
-        const rol = (data?.rol as RolUsuario | undefined) || null;
-        const activo = data?.activo !== false;
-        let empresaId = (data?.empresaId as string | undefined) || null;
-        const plan = (data?.plan as PlanEmpresa | undefined) || "enterprise";
-
-        if (!empresaId && rol === "admin") {
-          empresaId = await crearEmpresa({
-            nombre: data?.nombre ?? "Empresa",
-            plan: plan ?? "enterprise",
-            activo: true,
-          });
-          await updateDoc(ref, { empresaId });
-        }
-
-        const empresaGuardada =
-          typeof window !== "undefined" ? localStorage.getItem("empresaActualId") : null;
-        const empresaActualId =
-          rol === "superadmin"
-            ? empresaGuardada || empresaId
-            : empresaId || empresaGuardada || null;
-        if (empresaActualId) {
-          establecerEmpresaActual(empresaActualId);
-        }
-
-        if (data && data.activo === false) {
-          setEstado({
-            usuario: user,
-            rol,
-            activo: false,
-            cargando: false,
-            empresaId,
-            empresaActualId,
-          });
-          return;
-        }
-
-        setEstado({
-          usuario: user,
-          rol,
-          activo: true,
-          cargando: false,
-          empresaId,
-          empresaActualId,
-        });
       } catch (error) {
-        console.error("Error obteniendo rol de usuario", error);
-        setEstado({
-          usuario: user,
-          rol: null,
-          activo: false,
-          cargando: false,
-          empresaId: null,
-          empresaActualId: null,
-        });
+        console.error("No se pudo obtener el perfil del usuario", error);
       }
+
+      const almacenada =
+        typeof window !== "undefined" ? localStorage.getItem(EMPRESA_STORAGE_KEY) : null;
+      const empresaActualId = almacenada || empresaId;
+      if (empresaActualId && typeof window !== "undefined") {
+        localStorage.setItem(EMPRESA_STORAGE_KEY, empresaActualId);
+      }
+
+      setEstado({
+        usuario: user,
+        rol,
+        activo,
+        cargando: false,
+        empresaId,
+        empresaActualId,
+      });
     });
 
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (estado.empresaActualId) {
+      localStorage.setItem(EMPRESA_STORAGE_KEY, estado.empresaActualId);
+    } else {
+      localStorage.removeItem(EMPRESA_STORAGE_KEY);
+    }
+  }, [estado.empresaActualId]);
 
   return (
     <AuthContextWithSetter.Provider value={{ ...estado, cambiarEmpresaActual }}>

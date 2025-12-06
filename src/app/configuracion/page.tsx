@@ -28,6 +28,7 @@ import {
   subirLogoConfiguracion,
   useConfiguracion,
 } from "@/lib/configuracion/configuracion";
+import { formatearFechaHora } from "@/lib/fechas";
 
 const opcionesMoneda = ["MXN", "USD", "PEN", "EUR"];
 
@@ -45,8 +46,7 @@ export default function ConfiguracionPage() {
   }, [configuracion]);
 
   const fechaActualizacion = useMemo(() => {
-    if (!form.fechaActualizacion) return "Sin registro";
-    return form.fechaActualizacion.toLocaleString("es-MX");
+    return formatearFechaHora(form.fechaActualizacion, "Sin registro");
   }, [form.fechaActualizacion]);
 
   const seleccionarLogo = () => {

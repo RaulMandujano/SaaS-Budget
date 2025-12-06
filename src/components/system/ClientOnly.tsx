@@ -2,11 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export default function MountedGuard({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function ClientOnly({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {

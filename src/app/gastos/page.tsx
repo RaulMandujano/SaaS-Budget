@@ -17,6 +17,7 @@ import GastoDialog, { GastoFormData } from "@/components/gastos/GastoDialog";
 import { useAuth } from "@/context/AuthContext";
 import { registrarEventoAuditoria } from "@/lib/auditoria/registrarEvento";
 import { aplicarImpuesto, formatearMoneda, useConfiguracion } from "@/lib/configuracion/configuracion";
+import { formatearFecha } from "@/lib/fechas";
 
 export default function GastosPage() {
   const router = useRouter();
@@ -119,7 +120,9 @@ export default function GastosPage() {
             color="error"
             size="small"
             onClick={async () => {
-              const confirmar = window.confirm("¿Seguro que deseas eliminar este gasto?");
+              const confirmar = typeof window !== "undefined"
+                ? window.confirm("¿Seguro que deseas eliminar este gasto?")
+                : false;
               if (!confirmar) return;
               await eliminarGasto(params.row.id);
               await registrarEventoAuditoria({
@@ -146,7 +149,7 @@ export default function GastosPage() {
     return gastos
       .map((gasto) => ({
         id: gasto.id,
-        fecha: gasto.fecha ? gasto.fecha.toLocaleDateString("es-MX") : "Sin fecha",
+        fecha: formatearFecha(gasto.fecha),
         concepto: gasto.descripcion,
         categoria: gasto.tipo,
         monto: formatearMoneda(aplicarImpuesto(gasto.monto, configuracion), configuracion),
