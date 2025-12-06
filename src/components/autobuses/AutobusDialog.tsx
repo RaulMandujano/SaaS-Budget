@@ -11,7 +11,7 @@ import {
   Stack,
   TextField,
 } from "@mui/material";
-import { Autobus } from "@/lib/firestore/autobuses";
+import { Autobus, EstadoAutobus } from "@/lib/firestore/autobuses";
 import { Sucursal } from "@/lib/firestore/sucursales";
 
 export interface AutobusFormData {
@@ -21,7 +21,7 @@ export interface AutobusFormData {
   anio: string;
   capacidad: string;
   sucursalId: string;
-  estado: "activo" | "mantenimiento";
+  estado: EstadoAutobus;
 }
 
 interface Props {
@@ -33,6 +33,9 @@ interface Props {
 }
 
 export default function AutobusDialog({ open, onClose, onSave, initialData, sucursales }: Props) {
+  const esEstadoAutobus = (valor: string): valor is EstadoAutobus =>
+    valor === "activo" || valor === "mantenimiento" || valor === "fuera_servicio";
+
   const [form, setForm] = useState<AutobusFormData>({
     numeroUnidad: "",
     placa: "",
@@ -51,7 +54,7 @@ export default function AutobusDialog({ open, onClose, onSave, initialData, sucu
         placa: initialData.placa || "",
         modelo: initialData.modelo || "",
         anio: initialData.anio ? String(initialData.anio) : "",
-        capacidad: (initialData as any).capacidad ? String((initialData as any).capacidad) : "",
+        capacidad: String(initialData.capacidad ?? ""),
         sucursalId: initialData.sucursalId || "",
         estado: initialData.estado || "activo",
       });
@@ -158,11 +161,17 @@ export default function AutobusDialog({ open, onClose, onSave, initialData, sucu
             select
             label="Estado"
             value={form.estado}
-            onChange={(e) => setForm((p) => ({ ...p, estado: e.target.value as "activo" | "mantenimiento" }))}
+            onChange={(e) => {
+              const valor = e.target.value;
+              if (esEstadoAutobus(valor)) {
+                setForm((p) => ({ ...p, estado: valor }));
+              }
+            }}
             fullWidth
           >
             <MenuItem value="activo">Activo</MenuItem>
             <MenuItem value="mantenimiento">Mantenimiento</MenuItem>
+            <MenuItem value="fuera_servicio">Fuera de servicio</MenuItem>
           </TextField>
         </Stack>
       </DialogContent>

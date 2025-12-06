@@ -13,6 +13,8 @@ import {
 } from "firebase/firestore";
 import { asegurarEmpresaId } from "@/lib/firestore/empresas";
 
+export type EstadoChofer = "Activo" | "Suspendido";
+
 export interface Chofer {
   id: string;
   nombre: string;
@@ -20,12 +22,13 @@ export interface Chofer {
   telefono: string;
   autobusId: string;
   empresaId: string;
-  estado: string;
+  estado: EstadoChofer;
   createdAt?: Date | null;
 }
 
 const mapearChofer = (registro: any): Chofer => {
   const data = registro.data();
+  const estado: EstadoChofer = data.estado === "Suspendido" ? "Suspendido" : "Activo";
   return {
     id: registro.id,
     nombre: data.nombre ?? "",
@@ -33,7 +36,7 @@ const mapearChofer = (registro: any): Chofer => {
     telefono: data.telefono ?? "",
     autobusId: data.autobusId ?? "",
     empresaId: data.empresaId ?? "",
-    estado: data.estado ?? "Activo",
+    estado,
     createdAt: data.createdAt?.toDate?.() ?? null,
   };
 };
@@ -87,7 +90,7 @@ export const crearChofer = async (
   const ref = await addDoc(collection(db, "choferes"), {
     ...chofer,
     empresaId,
-    estado: chofer.estado || "Activo",
+    estado: chofer.estado ?? "Activo",
     createdAt: serverTimestamp(),
   });
   return ref.id;

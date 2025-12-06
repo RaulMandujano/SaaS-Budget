@@ -110,7 +110,7 @@ export default function ConfiguracionPage() {
       </Stack>
 
       <Grid container spacing={3}>
-        <Grid item xs={12} md={8}>
+        <Grid size={{ xs: 12, md: 8 }}>
           <Card elevation={3} sx={{ borderRadius: 3 }}>
             <CardContent>
               <Stack spacing={2}>
@@ -230,7 +230,7 @@ export default function ConfiguracionPage() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <Card elevation={3} sx={{ borderRadius: 3, height: "100%" }}>
             <CardContent>
               <Stack spacing={2}>

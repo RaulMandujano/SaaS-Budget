@@ -229,8 +229,8 @@ export default function DashboardPage() {
             overflow: "hidden",
           }}
         >
-          <Grid container spacing={3} alignItems="center">
-            <Grid item xs={12} md={7}>
+        <Grid container spacing={3} alignItems="center">
+          <Grid size={{ xs: 12, md: 7 }}>
               <Stack spacing={1.5}>
                 <Typography variant="h5" fontWeight={700}>
                   Bienvenido de nuevo 👋
@@ -262,7 +262,7 @@ export default function DashboardPage() {
                 </Button>
               </Stack>
             </Grid>
-            <Grid item xs={12} md={5}>
+          <Grid size={{ xs: 12, md: 5 }}>
               <Box
                 component="img"
                 src="/hero-dashboard.png"
@@ -288,7 +288,7 @@ export default function DashboardPage() {
         {/* Métricas */}
         <Grid container spacing={3} mb={4}>
           {cards.map((card) => (
-            <Grid item xs={12} sm={6} md={3} key={card.titulo}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }} key={card.titulo}>
               <Card
                 elevation={3}
                 sx={{
@@ -331,7 +331,7 @@ export default function DashboardPage() {
 
         {/* Gráficas */}
         <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card
               elevation={3}
               sx={{
@@ -350,7 +350,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card
               elevation={3}
               sx={{

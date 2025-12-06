@@ -12,31 +12,28 @@ import {
   TextField,
 } from "@mui/material";
 import { Autobus } from "@/lib/firestore/autobuses";
+import { Chofer, EstadoChofer } from "@/lib/firestore/choferes";
 
 export interface ChoferFormData {
   nombre: string;
   licencia: string;
   telefono: string;
   autobusId: string;
-  estado: "Activo" | "Suspendido";
+  estado: EstadoChofer;
 }
 
 interface Props {
   open: boolean;
   onClose: () => void;
   onSave: (data: ChoferFormData) => void;
-  initialData?: {
-    id: string;
-    nombre: string;
-    licencia: string;
-    telefono: string;
-    autobusId: string;
-    estado: string;
-  } | null;
+  initialData?: Chofer | null;
   autobuses: Autobus[];
 }
 
 export default function ChoferDialog({ open, onClose, onSave, initialData, autobuses }: Props) {
+  const esEstadoChofer = (valor: string): valor is EstadoChofer =>
+    valor === "Activo" || valor === "Suspendido";
+
   const [form, setForm] = useState<ChoferFormData>({
     nombre: "",
     licencia: "",
@@ -53,7 +50,7 @@ export default function ChoferDialog({ open, onClose, onSave, initialData, autob
         licencia: initialData.licencia ?? "",
         telefono: initialData.telefono ?? "",
         autobusId: initialData.autobusId ?? "",
-        estado: initialData.estado ?? "Activo",
+        estado: esEstadoChofer(initialData.estado) ? initialData.estado : "Activo",
       });
     } else {
       setForm({
@@ -146,7 +143,12 @@ export default function ChoferDialog({ open, onClose, onSave, initialData, autob
             select
             label="Estado"
             value={form.estado}
-            onChange={(e) => setForm((p) => ({ ...p, estado: e.target.value as "Activo" | "Suspendido" }))}
+            onChange={(e) => {
+              const valor = e.target.value;
+              if (esEstadoChofer(valor)) {
+                setForm((p) => ({ ...p, estado: valor }));
+              }
+            }}
             fullWidth
           >
             <MenuItem value="Activo">Activo</MenuItem>

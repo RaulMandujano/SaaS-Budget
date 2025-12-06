@@ -99,7 +99,7 @@ export default function EmpresasPage() {
         <Card elevation={3} sx={{ borderRadius: 3 }}>
           <CardContent>
             <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={5}>
+              <Grid size={{ xs: 12, md: 5 }}>
                 <TextField
                   label="Nombre de la empresa"
                   value={nombre}
@@ -107,7 +107,7 @@ export default function EmpresasPage() {
                   fullWidth
                 />
               </Grid>
-              <Grid item xs={12} md={3}>
+              <Grid size={{ xs: 12, md: 3 }}>
                 <TextField
                   select
                   label="Plan"
@@ -120,7 +120,7 @@ export default function EmpresasPage() {
                   <MenuItem value="enterprise">Enterprise</MenuItem>
                 </TextField>
               </Grid>
-              <Grid item xs={12} md={2}>
+              <Grid size={{ xs: 12, md: 2 }}>
                 <Button variant="contained" onClick={crear} fullWidth sx={{ height: "100%" }}>
                   Crear empresa
                 </Button>

@@ -13,9 +13,10 @@ import {
   eliminarChofer,
   obtenerChoferes,
   Chofer,
+  EstadoChofer,
 } from "@/lib/firestore/choferes";
 import { Box, Button, Paper, Stack, TextField, Typography, Alert } from "@mui/material";
-import { DataGrid, GridColDef, GridValueGetterParams } from "@mui/x-data-grid";
+import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import ChoferDialog, { ChoferFormData } from "@/components/choferes/ChoferDialog";
 import MountedGuard from "@/components/system/MountedGuard";
 import { useAuth } from "@/context/AuthContext";
@@ -27,7 +28,8 @@ interface ChoferRow {
   licencia: string;
   telefono: string;
   autobusId: string;
-  estado: string;
+  estado: EstadoChofer;
+  empresaId: string;
 }
 
 export default function ChoferesPage() {
@@ -80,6 +82,7 @@ export default function ChoferesPage() {
         telefono: c.telefono,
         autobusId: c.autobusId,
         estado: c.estado,
+        empresaId: c.empresaId || empresaId || "",
       }));
 
       setAutobuses(listaAutobuses);
@@ -185,7 +188,7 @@ export default function ChoferesPage() {
       headerName: "Autobús asignado",
       flex: 1,
       minWidth: 170,
-      valueGetter: (params: GridValueGetterParams) => {
+      valueGetter: (params: any) => {
         const autobusId = params?.row?.autobusId;
 
         if (!autobusId || !Array.isArray(autobuses)) {
@@ -308,7 +311,14 @@ export default function ChoferesPage() {
         open={dialogAbierto}
         onClose={cerrarDialogo}
         onSave={guardarChofer}
-        initialData={choferEditando}
+        initialData={
+          choferEditando
+            ? {
+                ...choferEditando,
+                empresaId: choferEditando.empresaId || empresaActualId || "",
+              }
+            : null
+        }
         autobuses={autobuses}
       />
     </Box>
