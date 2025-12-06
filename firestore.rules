@@ -1,0 +1,115 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function empresaIdAuth() {
+      return request.auth.token.empresaId != null ? request.auth.token.empresaId : "";
+    }
+
+    function rolAuth() {
+      return request.auth.token.rol != null ? request.auth.token.rol : "";
+    }
+
+    function mismaEmpresaNueva() {
+      return request.resource.data.empresaId == empresaIdAuth();
+    }
+
+    function mismaEmpresaExistente() {
+      return resource.data.empresaId == empresaIdAuth();
+    }
+
+    function rolAdmin() {
+      return rolAuth() in ["admin", "superadmin"];
+    }
+
+    function rolFinanzas() {
+      return rolAuth() == "finanzas";
+    }
+
+    function rolOperaciones() {
+      return rolAuth() == "operaciones";
+    }
+
+    function puedeAccederEmpresa() {
+      return isSignedIn() && (mismaEmpresaExistente() || mismaEmpresaNueva());
+    }
+
+    match /usuarios/{uid} {
+      allow create: if isSignedIn() && rolAdmin() && mismaEmpresaNueva();
+      allow read, update: if isSignedIn() && rolAdmin() && (mismaEmpresaExistente() || mismaEmpresaNueva());
+      allow delete: if false;
+    }
+
+    match /empresas/{empresaId} {
+      allow read, write: if isSignedIn() && rolAdmin() && (mismaEmpresaExistente() || mismaEmpresaNueva());
+    }
+
+    match /configuracion/{docId} {
+      allow read: if isSignedIn() && puedeAccederEmpresa();
+      allow write: if isSignedIn() && rolAdmin() && mismaEmpresaNueva();
+    }
+
+    match /auditoria/{docId} {
+      allow read, write: if isSignedIn() && rolAdmin() && puedeAccederEmpresa();
+    }
+
+    match /gastos/{docId} {
+      allow read: if isSignedIn() && (rolAdmin() || rolFinanzas() || rolAuth() == "superadmin") && puedeAccederEmpresa();
+      allow create: if isSignedIn() && (rolAdmin() || rolFinanzas() || rolAuth() == "superadmin") && mismaEmpresaNueva();
+      allow update, delete: if isSignedIn() && (rolAdmin() || rolAuth() == "superadmin") && puedeAccederEmpresa();
+    }
+
+    match /reportes/{docId} {
+      allow read: if isSignedIn() && (rolAdmin() || rolFinanzas() || rolAuth() == "superadmin") && puedeAccederEmpresa();
+      allow write: if isSignedIn() && (rolAdmin() || rolFinanzas() || rolAuth() == "superadmin") && mismaEmpresaNueva();
+    }
+
+    match /sucursales/{docId} {
+      allow read: if isSignedIn() && (rolAdmin() || rolOperaciones() || rolAuth() == "superadmin") && puedeAccederEmpresa();
+      allow create, update: if isSignedIn() && (rolAdmin() || rolOperaciones() || rolAuth() == "superadmin") && mismaEmpresaNueva();
+      allow delete: if isSignedIn() && (rolAdmin() || rolAuth() == "superadmin") && puedeAccederEmpresa();
+    }
+
+    match /autobuses/{docId} {
+      allow read: if isSignedIn() && (rolAdmin() || rolOperaciones() || rolAuth() == "superadmin") && puedeAccederEmpresa();
+      allow create, update: if isSignedIn() && (rolAdmin() || rolOperaciones() || rolAuth() == "superadmin") && mismaEmpresaNueva();
+      allow delete: if isSignedIn() && (rolAdmin() || rolAuth() == "superadmin") && puedeAccederEmpresa();
+    }
+
+    match /choferes/{docId} {
+      allow read: if isSignedIn() && (rolAdmin() || rolOperaciones() || rolAuth() == "superadmin") && puedeAccederEmpresa();
+      allow create, update: if isSignedIn() && (rolAdmin() || rolOperaciones() || rolAuth() == "superadmin") && mismaEmpresaNueva();
+      allow delete: if isSignedIn() && (rolAdmin() || rolAuth() == "superadmin") && puedeAccederEmpresa();
+    }
+
+    match /mantenimientos/{docId} {
+      allow read: if isSignedIn() && (rolAdmin() || rolOperaciones() || rolAuth() == "superadmin") && puedeAccederEmpresa();
+      allow create, update: if isSignedIn() && (rolAdmin() || rolOperaciones() || rolAuth() == "superadmin") && mismaEmpresaNueva();
+      allow delete: if isSignedIn() && (rolAdmin() || rolAuth() == "superadmin") && puedeAccederEmpresa();
+    }
+
+    match /viajes/{docId} {
+      allow read: if isSignedIn() && (rolAdmin() || rolOperaciones() || rolAuth() == "superadmin") && puedeAccederEmpresa();
+      allow create, update: if isSignedIn() && (rolAdmin() || rolOperaciones() || rolAuth() == "superadmin") && mismaEmpresaNueva();
+      allow delete: if isSignedIn() && (rolAdmin() || rolAuth() == "superadmin") && puedeAccederEmpresa();
+    }
+
+    match /erroresSistema/{docId} {
+      allow create: if isSignedIn() && mismaEmpresaNueva();
+      allow read: if isSignedIn() && rolAdmin() && puedeAccederEmpresa();
+      allow update, delete: if false;
+    }
+
+    match /backups/{docId} {
+      allow read: if isSignedIn() && rolAdmin();
+      allow write: if isSignedIn() && rolAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

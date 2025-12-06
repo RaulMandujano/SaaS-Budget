@@ -7,34 +7,58 @@ import { auth } from "@/lib/firebase";
 import ProtectedLayout from "@/components/layout/ProtectedLayout";
 import PanelLayout from "@/components/layout/PanelLayout";
 import { crearSucursal, actualizarSucursal, obtenerSucursales, Sucursal } from "@/lib/firestore/sucursales";
-import { Box, Button, Paper, Stack, TextField, Typography } from "@mui/material";
+import { Box, Button, Paper, Stack, TextField, Typography, Alert } from "@mui/material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import SucursalDialog, { SucursalFormData } from "@/components/sucursales/SucursalDialog";
 import MountedGuard from "@/components/system/MountedGuard";
+import { useAuth } from "@/context/AuthContext";
+import { registrarEventoAuditoria } from "@/lib/auditoria/registrarEvento";
 
 export default function SucursalesPage() {
   const router = useRouter();
+  const { usuario, rol, empresaActualId } = useAuth();
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [cargandoAuth, setCargandoAuth] = useState(true);
+  const [cargandoDatos, setCargandoDatos] = useState(true);
+  const [errorCarga, setErrorCarga] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [dialogAbierto, setDialogAbierto] = useState(false);
   const [sucursalEditando, setSucursalEditando] = useState<Sucursal | null>(null);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (usuario) => {
-      if (!usuario) {
+    const unsub = onAuthStateChanged(auth, (usuarioActual) => {
+      if (!usuarioActual) {
         router.push("/login");
       } else {
         setCargandoAuth(false);
-        cargarSucursales();
       }
     });
     return () => unsub();
   }, [router]);
 
-  const cargarSucursales = async () => {
-    const lista = await obtenerSucursales();
-    setSucursales(lista);
+  useEffect(() => {
+    if (!cargandoAuth && empresaActualId) {
+      cargarSucursales(empresaActualId);
+    }
+  }, [cargandoAuth, empresaActualId]);
+
+  const cargarSucursales = async (empresaId?: string) => {
+    if (!empresaId) {
+      setCargandoDatos(false);
+      return;
+    }
+    try {
+      setCargandoDatos(true);
+      setErrorCarga("");
+      const lista = await obtenerSucursales(empresaId);
+      setSucursales(lista);
+    } catch (error) {
+      console.error("Error al cargar sucursales", error);
+      setErrorCarga("No se pudieron cargar las sucursales. Intenta nuevamente.");
+      setSucursales([]);
+    } finally {
+      setCargandoDatos(false);
+    }
   };
 
   const columnas: GridColDef[] = [
@@ -62,7 +86,33 @@ export default function SucursalesPage() {
           >
             Editar
           </Button>
-          <Button variant="outlined" color="error" size="small">
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            onClick={async () => {
+              const confirmar = window.confirm("¿Seguro que deseas eliminar esta sucursal?");
+              if (!confirmar) return;
+              try {
+                await import("@/lib/firestore/sucursales").then(({ eliminarSucursal }) =>
+                  eliminarSucursal(params.row.id),
+                );
+                await registrarEventoAuditoria({
+                  usuarioId: usuario?.uid,
+                  usuarioNombre: usuario?.displayName ?? "Usuario",
+                  usuarioEmail: usuario?.email ?? "",
+                  rol: rol ?? null,
+                  modulo: "sucursales",
+                  accion: "eliminar",
+                  descripcion: `Eliminó la sucursal ${params.row.nombre}`,
+                });
+                await cargarSucursales(empresaActualId);
+              } catch (error) {
+                console.error(error);
+                alert("No se pudo eliminar la sucursal");
+              }
+            }}
+          >
             Eliminar
           </Button>
         </Stack>
@@ -99,31 +149,52 @@ export default function SucursalesPage() {
   };
 
   const guardarSucursal = async (data: SucursalFormData) => {
-    if (sucursalEditando) {
-      await actualizarSucursal(
-        sucursalEditando.id,
-        {
+    try {
+      if (sucursalEditando) {
+        await actualizarSucursal(
+          sucursalEditando.id,
+          {
+            nombre: data.nombre,
+            ciudad: data.ciudad,
+            activa: sucursalEditando.activa,
+            encargado: data.encargado,
+            telefono: data.telefono,
+          } as any,
+        );
+        await registrarEventoAuditoria({
+          usuarioId: usuario?.uid,
+          usuarioNombre: usuario?.displayName ?? "Usuario",
+          usuarioEmail: usuario?.email ?? "",
+          rol: rol ?? null,
+          modulo: "sucursales",
+          accion: "editar",
+          descripcion: `Editó la sucursal ${data.nombre}`,
+        });
+      } else {
+        await crearSucursal({
           nombre: data.nombre,
           ciudad: data.ciudad,
-          activa: sucursalEditando.activa,
-          // Campos adicionales
+          activa: true,
           encargado: data.encargado,
           telefono: data.telefono,
-        } as any,
-      );
-    } else {
-      await crearSucursal({
-        nombre: data.nombre,
-        ciudad: data.ciudad,
-        activa: true,
-        // Campos adicionales
-        encargado: data.encargado,
-        telefono: data.telefono,
-      } as any);
+        } as any);
+        await registrarEventoAuditoria({
+          usuarioId: usuario?.uid,
+          usuarioNombre: usuario?.displayName ?? "Usuario",
+          usuarioEmail: usuario?.email ?? "",
+          rol: rol ?? null,
+          modulo: "sucursales",
+          accion: "crear",
+          descripcion: `Creó la sucursal ${data.nombre}`,
+        });
+      }
+      await cargarSucursales(empresaActualId);
+      setDialogAbierto(false);
+      setSucursalEditando(null);
+    } catch (error) {
+      console.error(error);
+      alert("No se pudo guardar la sucursal");
     }
-    await cargarSucursales();
-    setDialogAbierto(false);
-    setSucursalEditando(null);
   };
 
   const contenido = (
@@ -156,18 +227,28 @@ export default function SucursalesPage() {
         </Stack>
       </Stack>
 
+      {errorCarga && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {errorCarga}
+        </Alert>
+      )}
+
       <Paper elevation={3} sx={{ borderRadius: 3, p: 2 }}>
         <Box sx={{ height: 520, width: "100%" }}>
-          <DataGrid
-            rows={filas}
-            columns={columnas}
-            checkboxSelection
-            disableRowSelectionOnClick
-            pageSizeOptions={[5, 10, 25]}
-            initialState={{
-              pagination: { paginationModel: { pageSize: 10, page: 0 } },
-            }}
-          />
+          {cargandoDatos ? (
+            <Box p={3}>Cargando datos...</Box>
+          ) : (
+            <DataGrid
+              rows={filas}
+              columns={columnas}
+              checkboxSelection
+              disableRowSelectionOnClick
+              pageSizeOptions={[5, 10, 25]}
+              initialState={{
+                pagination: { paginationModel: { pageSize: 10, page: 0 } },
+              }}
+            />
+          )}
         </Box>
       </Paper>
 

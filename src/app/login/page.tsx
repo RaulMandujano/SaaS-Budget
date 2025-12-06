@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { auth, db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 import {
   Container,
@@ -28,7 +29,15 @@ export default function LoginPage() {
     setError("");
     setCargando(true);
     try {
-      await signInWithEmailAndPassword(auth, correo, password);
+      const cred = await signInWithEmailAndPassword(auth, correo, password);
+      const ref = doc(db, "usuarios", cred.user.uid);
+      const snap = await getDoc(ref);
+      const data = snap.data();
+      if (!data || data.activo === false) {
+        await signOut(auth);
+        setError("Tu cuenta no está activa o no existe en el sistema.");
+        return;
+      }
       router.push("/dashboard");
     } catch (err: any) {
       setError("Credenciales incorrectas");

@@ -1,5 +1,6 @@
 import { db } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { asegurarEmpresaId } from "@/lib/firestore/empresas";
 
 interface Gasto {
   sucursalId: string;
@@ -21,11 +22,13 @@ export interface GastoPorTipo {
 export interface TotalesSistema {
   totalAutobuses: number;
   totalSucursales: number;
+  totalChoferes: number;
 }
 
-const obtenerGastos = async (): Promise<Gasto[]> => {
+const obtenerGastos = async (empresaIdParam?: string): Promise<Gasto[]> => {
   try {
-    const snapshot = await getDocs(collection(db, "gastos"));
+    const empresaId = asegurarEmpresaId(empresaIdParam);
+    const snapshot = await getDocs(query(collection(db, "gastos"), where("empresaId", "==", empresaId)));
     return snapshot.docs.map((docSnap) => {
       const data = docSnap.data();
       return {
@@ -41,11 +44,11 @@ const obtenerGastos = async (): Promise<Gasto[]> => {
   }
 };
 
-export const obtenerGastoTotal = async (): Promise<{
+export const obtenerGastoTotal = async (empresaIdParam?: string): Promise<{
   totalHistorico: number;
   totalMes: number;
 }> => {
-  const gastos = await obtenerGastos();
+  const gastos = await obtenerGastos(empresaIdParam);
   const ahora = new Date();
   const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
 
@@ -62,8 +65,8 @@ export const obtenerGastoTotal = async (): Promise<{
   return { totalHistorico, totalMes };
 };
 
-export const obtenerGastoPorSucursal = async (): Promise<GastoPorSucursal[]> => {
-  const gastos = await obtenerGastos();
+export const obtenerGastoPorSucursal = async (empresaIdParam?: string): Promise<GastoPorSucursal[]> => {
+  const gastos = await obtenerGastos(empresaIdParam);
   const acumulado = new Map<string, number>();
 
   gastos.forEach((gasto) => {
@@ -77,8 +80,8 @@ export const obtenerGastoPorSucursal = async (): Promise<GastoPorSucursal[]> => 
   }));
 };
 
-export const obtenerGastoPorTipo = async (): Promise<GastoPorTipo[]> => {
-  const gastos = await obtenerGastos();
+export const obtenerGastoPorTipo = async (empresaIdParam?: string): Promise<GastoPorTipo[]> => {
+  const gastos = await obtenerGastos(empresaIdParam);
   const acumulado = new Map<string, number>();
 
   gastos.forEach((gasto) => {
@@ -92,22 +95,26 @@ export const obtenerGastoPorTipo = async (): Promise<GastoPorTipo[]> => {
   }));
 };
 
-export const obtenerTotalesSistema = async (): Promise<TotalesSistema> => {
+export const obtenerTotalesSistema = async (empresaIdParam?: string): Promise<TotalesSistema> => {
   try {
-    const [autobusesSnap, sucursalesSnap] = await Promise.all([
-      getDocs(collection(db, "autobuses")),
-      getDocs(collection(db, "sucursales")),
+    const empresaId = asegurarEmpresaId(empresaIdParam);
+    const [autobusesSnap, sucursalesSnap, choferesSnap] = await Promise.all([
+      getDocs(query(collection(db, "autobuses"), where("empresaId", "==", empresaId))),
+      getDocs(query(collection(db, "sucursales"), where("empresaId", "==", empresaId))),
+      getDocs(query(collection(db, "choferes"), where("empresaId", "==", empresaId))),
     ]);
 
     return {
       totalAutobuses: autobusesSnap.size,
       totalSucursales: sucursalesSnap.size,
+      totalChoferes: choferesSnap.size,
     };
   } catch (error) {
     console.warn("No se pudieron obtener los totales del sistema. Usando 0.", error);
     return {
       totalAutobuses: 0,
       totalSucursales: 0,
+      totalChoferes: 0,
     };
   }
 };

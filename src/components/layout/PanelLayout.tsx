@@ -1,11 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   AppBar,
+  Avatar,
   Box,
+  Chip,
+  CircularProgress,
   CssBaseline,
   Divider,
   Drawer,
@@ -14,6 +17,8 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  MenuItem,
+  Select,
   Toolbar,
   Typography,
 } from "@mui/material";
@@ -25,19 +30,80 @@ import PeopleIcon from "@mui/icons-material/People";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import AltRouteIcon from "@mui/icons-material/AltRoute";
 import AssessmentIcon from "@mui/icons-material/Assessment";
+import SettingsIcon from "@mui/icons-material/Settings";
+import GroupIcon from "@mui/icons-material/Group";
+import ProtectedRoute from "@/components/system/ProtectedRoute";
+import { useAuth, RolUsuario } from "@/context/AuthContext";
+import { useConfiguracion } from "@/lib/configuracion/configuracion";
+import { Empresa, obtenerEmpresas } from "@/lib/firestore/empresas";
 
 const drawerWidth = 260;
 
 interface PanelLayoutProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export default function PanelLayout({ children }: PanelLayoutProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { rol, empresaActualId, cambiarEmpresaActual } = useAuth();
+  const { configuracion, cargandoConfiguracion } = useConfiguracion();
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
 
-  const menuItems = useMemo(
-    () => [
+  useEffect(() => {
+    const cargarEmpresas = async () => {
+      if (rol !== "superadmin") {
+        setEmpresas([]);
+        return;
+      }
+      try {
+        const lista = await obtenerEmpresas();
+        setEmpresas(lista);
+        if (!empresaActualId && lista[0]) {
+          cambiarEmpresaActual(lista[0].id);
+        }
+      } catch (error) {
+        console.error("No se pudieron cargar las empresas", error);
+      }
+    };
+    cargarEmpresas();
+  }, [rol, empresaActualId, cambiarEmpresaActual]);
+
+  const menuItems = useMemo(() => {
+    if (!rol) {
+      return [{ label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> }];
+    }
+    if (rol === "superadmin") {
+      return [
+        { label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> },
+        { label: "Empresas", path: "/empresas", icon: <GroupIcon /> },
+        { label: "Sucursales", path: "/sucursales", icon: <LocationCityIcon /> },
+        { label: "Autobuses", path: "/autobuses", icon: <DirectionsBusIcon /> },
+        { label: "Choferes", path: "/choferes", icon: <PeopleIcon /> },
+        { label: "Gastos", path: "/gastos", icon: <ReceiptLongIcon /> },
+        { label: "Rutas", path: "/rutas", icon: <AltRouteIcon /> },
+        { label: "Reportes", path: "/reportes", icon: <AssessmentIcon /> },
+        { label: "Auditoría", path: "/auditoria", icon: <AssessmentIcon /> },
+        { label: "Usuarios", path: "/usuarios", icon: <GroupIcon /> },
+        { label: "Configuración", path: "/configuracion", icon: <SettingsIcon /> },
+      ];
+    }
+    if (rol === "finanzas") {
+      return [
+        { label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> },
+        { label: "Gastos", path: "/gastos", icon: <ReceiptLongIcon /> },
+        { label: "Reportes", path: "/reportes", icon: <AssessmentIcon /> },
+      ];
+    }
+    if (rol === "operaciones") {
+      return [
+        { label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> },
+        { label: "Sucursales", path: "/sucursales", icon: <LocationCityIcon /> },
+        { label: "Autobuses", path: "/autobuses", icon: <DirectionsBusIcon /> },
+        { label: "Choferes", path: "/choferes", icon: <PeopleIcon /> },
+      ];
+    }
+    return [
       { label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> },
       { label: "Sucursales", path: "/sucursales", icon: <LocationCityIcon /> },
       { label: "Autobuses", path: "/autobuses", icon: <DirectionsBusIcon /> },
@@ -45,9 +111,33 @@ export default function PanelLayout({ children }: PanelLayoutProps) {
       { label: "Gastos", path: "/gastos", icon: <ReceiptLongIcon /> },
       { label: "Rutas", path: "/rutas", icon: <AltRouteIcon /> },
       { label: "Reportes", path: "/reportes", icon: <AssessmentIcon /> },
-    ],
-    [],
-  );
+      { label: "Auditoría", path: "/auditoria", icon: <AssessmentIcon /> },
+      { label: "Usuarios", path: "/usuarios", icon: <GroupIcon /> },
+      { label: "Configuración", path: "/configuracion", icon: <SettingsIcon /> },
+    ];
+  }, [rol]);
+
+  const rolesPermitidosPorRuta = (path: string): RolUsuario[] => {
+    if (!rol) {
+      return path.startsWith("/dashboard")
+        ? ([] as RolUsuario[])
+        : ["admin", "finanzas", "operaciones", "superadmin"];
+    }
+    if (rol === "superadmin") return ["superadmin", "admin", "finanzas", "operaciones"];
+    if (path.startsWith("/empresas")) return ["superadmin"];
+    if (path.startsWith("/usuarios")) return ["admin", "superadmin"];
+    if (path.startsWith("/reportes")) return ["admin", "finanzas", "superadmin"];
+    if (path.startsWith("/gastos")) return ["admin", "finanzas", "superadmin"];
+    if (path.startsWith("/auditoria")) return ["admin", "superadmin"];
+    if (path.startsWith("/sucursales")) return ["admin", "operaciones", "superadmin"];
+    if (path.startsWith("/autobuses")) return ["admin", "operaciones", "superadmin"];
+    if (path.startsWith("/choferes")) return ["admin", "operaciones", "superadmin"];
+    if (path.startsWith("/configuracion")) return ["admin", "superadmin"];
+    return ["admin", "finanzas", "operaciones", "superadmin"];
+  };
+
+  const rolesPermitidos = rolesPermitidosPorRuta(pathname || "");
+  const enMantenimiento = configuracion.modoMantenimiento && rol !== "admin" && rol !== "superadmin";
 
   const drawer = (
     <Box
@@ -58,13 +148,26 @@ export default function PanelLayout({ children }: PanelLayoutProps) {
         backgroundColor: "#F5F7FB",
       }}
     >
-      <Box sx={{ px: 3, py: 3 }}>
-        <Typography variant="h6" fontWeight={800} color="#1f2937">
-          Estrella Polar
-        </Typography>
-        <Typography variant="body2" color="#6b7280">
-          Panel de administración
-        </Typography>
+      <Box sx={{ px: 3, py: 3, display: "flex", alignItems: "center", gap: 1.5 }}>
+        {configuracion.logoUrl ? (
+          <Avatar
+            src={configuracion.logoUrl}
+            alt={configuracion.nombreEmpresa}
+            sx={{ width: 44, height: 44, border: "2px solid #e5e7eb" }}
+          />
+        ) : (
+          <Avatar sx={{ width: 44, height: 44, bgcolor: "#2563eb", fontWeight: 700 }}>
+            {configuracion.nombreEmpresa?.[0]?.toUpperCase() || "E"}
+          </Avatar>
+        )}
+        <Box>
+          <Typography variant="h6" fontWeight={800} color="#1f2937" noWrap>
+            {configuracion.nombreEmpresa || "Estrella Polar"}
+          </Typography>
+          <Typography variant="body2" color="#6b7280">
+            Panel de administración
+          </Typography>
+        </Box>
       </Box>
       <Divider />
       <List sx={{ px: 2, pt: 1 }}>
@@ -105,6 +208,54 @@ export default function PanelLayout({ children }: PanelLayoutProps) {
     </Box>
   );
 
+  const contenidoPrincipal = (
+    <ProtectedRoute roles={rolesPermitidos}>
+      {cargandoConfiguracion ? (
+        <Box
+          sx={{
+            minHeight: "60vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 2,
+          }}
+        >
+          <CircularProgress size={32} />
+          <Typography>Cargando configuración...</Typography>
+        </Box>
+      ) : enMantenimiento ? (
+        <Box
+          sx={{
+            minHeight: "60vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Box
+            sx={{
+              background: "white",
+              p: { xs: 3, md: 4 },
+              borderRadius: 3,
+              boxShadow: "0px 10px 30px rgba(0,0,0,0.06)",
+              maxWidth: 520,
+              textAlign: "center",
+            }}
+          >
+            <Typography variant="h5" fontWeight={800} gutterBottom color="text.primary">
+              El sistema está en mantenimiento
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Intenta más tarde. Solo el administrador puede acceder mientras dure el mantenimiento.
+            </Typography>
+          </Box>
+        </Box>
+      ) : (
+        children
+      )}
+    </ProtectedRoute>
+  );
+
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", backgroundColor: "#F3F4F6" }}>
       <CssBaseline />
@@ -129,13 +280,34 @@ export default function PanelLayout({ children }: PanelLayoutProps) {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" fontWeight={700}>
-            Panel Estrella Polar
+            Panel {configuracion.nombreEmpresa || "Estrella Polar"}
           </Typography>
           <Box sx={{ flexGrow: 1 }} />
+          {rol === "superadmin" && empresas.length > 0 && (
+            <Select
+              size="small"
+              value={empresaActualId || empresas[0]?.id || ""}
+              onChange={(e) => cambiarEmpresaActual(e.target.value)}
+              sx={{ minWidth: 180, mr: 2 }}
+            >
+              {empresas.map((emp) => (
+                <MenuItem key={emp.id} value={emp.id}>
+                  {emp.nombre}
+                </MenuItem>
+              ))}
+            </Select>
+          )}
+          {configuracion.modoMantenimiento && (
+            <Chip label="Mantenimiento activo" color="warning" size="small" />
+          )}
         </Toolbar>
       </AppBar>
 
-      <Box component="nav" sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }} aria-label="menu lateral">
+      <Box
+        component="nav"
+        sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
+        aria-label="menu lateral"
+      >
         <Drawer
           variant="temporary"
           open={mobileOpen}
@@ -143,7 +315,11 @@ export default function PanelLayout({ children }: PanelLayoutProps) {
           ModalProps={{ keepMounted: true }}
           sx={{
             display: { xs: "block", md: "none" },
-            "& .MuiDrawer-paper": { width: drawerWidth, boxSizing: "border-box", borderRight: "1px solid #e5e7eb" },
+            "& .MuiDrawer-paper": {
+              width: drawerWidth,
+              boxSizing: "border-box",
+              borderRight: "1px solid #e5e7eb",
+            },
           }}
         >
           {drawer}
@@ -152,7 +328,11 @@ export default function PanelLayout({ children }: PanelLayoutProps) {
           variant="permanent"
           sx={{
             display: { xs: "none", md: "block" },
-            "& .MuiDrawer-paper": { width: drawerWidth, boxSizing: "border-box", borderRight: "1px solid #e5e7eb" },
+            "& .MuiDrawer-paper": {
+              width: drawerWidth,
+              boxSizing: "border-box",
+              borderRight: "1px solid #e5e7eb",
+            },
           }}
           open
         >
@@ -169,7 +349,7 @@ export default function PanelLayout({ children }: PanelLayoutProps) {
           width: { md: `calc(100% - ${drawerWidth}px)` },
         }}
       >
-        {children}
+        {contenidoPrincipal}
       </Box>
     </Box>
   );

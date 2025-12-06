@@ -2,16 +2,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, getDocs, addDoc, updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import ProtectedLayout from "@/components/layout/ProtectedLayout";
 import PanelLayout from "@/components/layout/PanelLayout";
 import { obtenerAutobuses, Autobus } from "@/lib/firestore/autobuses";
-import { Box, Button, Paper, Stack, TextField, Typography } from "@mui/material";
+import {
+  actualizarChofer,
+  crearChofer,
+  eliminarChofer,
+  obtenerChoferes,
+  Chofer,
+} from "@/lib/firestore/choferes";
+import { Box, Button, Paper, Stack, TextField, Typography, Alert } from "@mui/material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import ChoferDialog, { ChoferFormData } from "@/components/choferes/ChoferDialog";
 import MountedGuard from "@/components/system/MountedGuard";
+import { useAuth } from "@/context/AuthContext";
+import { registrarEventoAuditoria } from "@/lib/auditoria/registrarEvento";
 
 interface ChoferRow {
   id: string;
@@ -24,7 +32,10 @@ interface ChoferRow {
 
 export default function ChoferesPage() {
   const router = useRouter();
+  const { usuario, rol, empresaActualId } = useAuth();
   const [cargandoAuth, setCargandoAuth] = useState(true);
+  const [cargandoDatos, setCargandoDatos] = useState(true);
+  const [errorCarga, setErrorCarga] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [choferes, setChoferes] = useState<ChoferRow[]>([]);
   const [autobuses, setAutobuses] = useState<Autobus[]>([]);
@@ -37,36 +48,131 @@ export default function ChoferesPage() {
         router.push("/login");
       } else {
         setCargandoAuth(false);
-        cargarDatos();
       }
     });
     return () => unsub();
   }, [router]);
 
+  useEffect(() => {
+    if (!cargandoAuth && empresaActualId) {
+      cargarDatos();
+    }
+  }, [cargandoAuth, empresaActualId]);
+
   const cargarDatos = async () => {
+    if (!empresaActualId) {
+      setCargandoDatos(false);
+      return;
+    }
     try {
-      const [listaAutobuses, snapshotChoferes] = await Promise.all([
-        obtenerAutobuses(),
-        getDocs(collection(db, "choferes")),
+      setCargandoDatos(true);
+      setErrorCarga("");
+      const empresaId = empresaActualId || undefined;
+      const [listaAutobuses, listaChoferesRaw] = await Promise.all([
+        obtenerAutobuses(empresaId),
+        obtenerChoferes(empresaId),
       ]);
 
-      const listaChoferes: ChoferRow[] = snapshotChoferes.docs.map((registro) => {
-        const data = registro.data();
-        return {
-          id: registro.id,
-          nombre: data.nombre ?? "",
-          licencia: data.licencia ?? "",
-          telefono: data.telefono ?? "",
-          autobusId: data.autobusId ?? "",
-          estado: data.estado ?? "Activo",
-        };
-      });
+      const listaChoferes: ChoferRow[] = listaChoferesRaw.map((c: Chofer) => ({
+        id: c.id,
+        nombre: c.nombre,
+        licencia: c.licencia,
+        telefono: c.telefono,
+        autobusId: c.autobusId,
+        estado: c.estado,
+      }));
 
       setAutobuses(listaAutobuses);
       setChoferes(listaChoferes);
     } catch (error) {
       console.error("Error al cargar choferes o autobuses", error);
-      alert("No se pudieron cargar los datos de choferes. Intenta nuevamente.");
+      setErrorCarga("No se pudieron cargar los datos de choferes. Intenta nuevamente.");
+      setChoferes([]);
+    } finally {
+      setCargandoDatos(false);
+    }
+  };
+
+  const abrirCrear = () => {
+    if (autobuses.length === 0) {
+      alert("Primero registra un autobús para asignarlo al chofer.");
+      return;
+    }
+    setChoferEditando(null);
+    setDialogAbierto(true);
+  };
+
+  const cerrarDialogo = () => {
+    setDialogAbierto(false);
+  };
+
+  const guardarChofer = async (data: ChoferFormData) => {
+    try {
+      if (choferEditando) {
+        await actualizarChofer(choferEditando.id, {
+          nombre: data.nombre,
+          licencia: data.licencia,
+          telefono: data.telefono,
+          autobusId: data.autobusId,
+          estado: data.estado,
+        });
+        await registrarEventoAuditoria({
+          usuarioId: usuario?.uid,
+          usuarioNombre: usuario?.displayName ?? "Usuario",
+          usuarioEmail: usuario?.email ?? "",
+          rol: rol ?? null,
+          modulo: "choferes",
+          accion: "editar",
+          descripcion: `Editó el chofer ${data.nombre}`,
+        });
+      } else {
+        await crearChofer(
+          {
+            nombre: data.nombre,
+            licencia: data.licencia,
+            telefono: data.telefono,
+            autobusId: data.autobusId,
+            estado: data.estado,
+          },
+          empresaActualId || undefined,
+        );
+        await registrarEventoAuditoria({
+          usuarioId: usuario?.uid,
+          usuarioNombre: usuario?.displayName ?? "Usuario",
+          usuarioEmail: usuario?.email ?? "",
+          rol: rol ?? null,
+          modulo: "choferes",
+          accion: "crear",
+          descripcion: `Creó el chofer ${data.nombre}`,
+        });
+      }
+      await cargarDatos();
+      setDialogAbierto(false);
+      setChoferEditando(null);
+    } catch (error) {
+      console.error("Error al guardar chofer", error);
+      alert("Ocurrió un error al guardar el chofer. Intenta de nuevo.");
+    }
+  };
+
+  const eliminarChoferHandler = async (row: ChoferRow) => {
+    const confirmar = window.confirm("¿Seguro que deseas eliminar este chofer?");
+    if (!confirmar) return;
+    try {
+      await eliminarChofer(row.id);
+      await registrarEventoAuditoria({
+        usuarioId: usuario?.uid,
+        usuarioNombre: usuario?.displayName ?? "Usuario",
+        usuarioEmail: usuario?.email ?? "",
+        rol: rol ?? null,
+        modulo: "choferes",
+        accion: "eliminar",
+        descripcion: `Eliminó el chofer ${row.nombre}`,
+      });
+      await cargarDatos();
+    } catch (error) {
+      console.error(error);
+      alert("No se pudo eliminar el chofer");
     }
   };
 
@@ -111,7 +217,12 @@ export default function ChoferesPage() {
           >
             Editar
           </Button>
-          <Button variant="outlined" color="error" size="small">
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            onClick={() => eliminarChoferHandler(params.row)}
+          >
             Eliminar
           </Button>
         </Stack>
@@ -137,48 +248,6 @@ export default function ChoferesPage() {
           .includes(filtro),
       );
   }, [choferes, busqueda]);
-
-  const abrirCrear = () => {
-    if (autobuses.length === 0) {
-      alert("Primero registra un autobús para asignarlo al chofer.");
-      return;
-    }
-    setChoferEditando(null);
-    setDialogAbierto(true);
-  };
-
-  const cerrarDialogo = () => {
-    setDialogAbierto(false);
-  };
-
-  const guardarChofer = async (data: ChoferFormData) => {
-    try {
-      if (choferEditando) {
-        await updateDoc(doc(db, "choferes", choferEditando.id), {
-          nombre: data.nombre,
-          licencia: data.licencia,
-          telefono: data.telefono,
-          autobusId: data.autobusId,
-          estado: data.estado,
-        });
-      } else {
-        await addDoc(collection(db, "choferes"), {
-          nombre: data.nombre,
-          licencia: data.licencia,
-          telefono: data.telefono,
-          autobusId: data.autobusId,
-          estado: data.estado,
-          createdAt: serverTimestamp(),
-        });
-      }
-      await cargarDatos();
-      setDialogAbierto(false);
-      setChoferEditando(null);
-    } catch (error) {
-      console.error("Error al guardar chofer", error);
-      alert("Ocurrió un error al guardar el chofer. Intenta de nuevo.");
-    }
-  };
 
   const contenido = (
     <Box>
@@ -210,18 +279,28 @@ export default function ChoferesPage() {
         </Stack>
       </Stack>
 
+      {errorCarga && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {errorCarga}
+        </Alert>
+      )}
+
       <Paper elevation={3} sx={{ borderRadius: 3, p: 2 }}>
         <Box sx={{ height: 520, width: "100%" }}>
-          <DataGrid
-            rows={filas}
-            columns={columnas}
-            checkboxSelection
-            disableRowSelectionOnClick
-            pageSizeOptions={[5, 10, 25]}
-            initialState={{
-              pagination: { paginationModel: { pageSize: 10, page: 0 } },
-            }}
-          />
+          {cargandoDatos ? (
+            <Box p={3}>Cargando datos...</Box>
+          ) : (
+            <DataGrid
+              rows={filas}
+              columns={columnas}
+              checkboxSelection
+              disableRowSelectionOnClick
+              pageSizeOptions={[5, 10, 25]}
+              initialState={{
+                pagination: { paginationModel: { pageSize: 10, page: 0 } },
+              }}
+            />
+          )}
         </Box>
       </Paper>
 

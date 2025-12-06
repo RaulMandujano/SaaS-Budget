@@ -6,19 +6,31 @@ import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import ProtectedLayout from "@/components/layout/ProtectedLayout";
 import PanelLayout from "@/components/layout/PanelLayout";
-import { obtenerAutobuses, Autobus, crearAutobus, actualizarAutobus } from "@/lib/firestore/autobuses";
+import {
+  obtenerAutobuses,
+  Autobus,
+  crearAutobus,
+  actualizarAutobus,
+  eliminarAutobus,
+} from "@/lib/firestore/autobuses";
 import { obtenerSucursales, Sucursal } from "@/lib/firestore/sucursales";
 import { Box, Button, Paper, Stack, TextField, Typography } from "@mui/material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import AutobusDialog, { AutobusFormData } from "@/components/autobuses/AutobusDialog";
 import MountedGuard from "@/components/system/MountedGuard";
+import { useAuth } from "@/context/AuthContext";
+import { registrarEventoAuditoria } from "@/lib/auditoria/registrarEvento";
+import { Alert } from "@mui/material";
 
 export default function AutobusesPage() {
   const router = useRouter();
+  const { usuario, rol, empresaActualId } = useAuth();
   const [autobuses, setAutobuses] = useState<Autobus[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [busqueda, setBusqueda] = useState("");
   const [cargandoAuth, setCargandoAuth] = useState(true);
+  const [cargandoDatos, setCargandoDatos] = useState(true);
+  const [errorCarga, setErrorCarga] = useState("");
   const [dialogAbierto, setDialogAbierto] = useState(false);
   const [autobusEditando, setAutobusEditando] = useState<Autobus | null>(null);
 
@@ -28,16 +40,39 @@ export default function AutobusesPage() {
         router.push("/login");
       } else {
         setCargandoAuth(false);
-        cargarDatos();
       }
     });
     return () => unsub();
   }, [router]);
 
+  useEffect(() => {
+    if (!cargandoAuth && empresaActualId) {
+      cargarDatos();
+    }
+  }, [cargandoAuth, empresaActualId]);
+
   const cargarDatos = async () => {
-    const [listaSucursales, listaAutobuses] = await Promise.all([obtenerSucursales(), obtenerAutobuses()]);
-    setSucursales(listaSucursales);
-    setAutobuses(listaAutobuses);
+    if (!empresaActualId) {
+      setCargandoDatos(false);
+      return;
+    }
+    try {
+      setCargandoDatos(true);
+      setErrorCarga("");
+      const empresaId = empresaActualId || undefined;
+      const [listaSucursales, listaAutobuses] = await Promise.all([
+        obtenerSucursales(empresaId),
+        obtenerAutobuses(empresaId),
+      ]);
+      setSucursales(listaSucursales);
+      setAutobuses(listaAutobuses);
+    } catch (error) {
+      console.error("Error al cargar autobuses o sucursales", error);
+      setErrorCarga("No se pudieron cargar los autobuses. Intenta nuevamente.");
+      setAutobuses([]);
+    } finally {
+      setCargandoDatos(false);
+    }
   };
 
   const columnas: GridColDef[] = [
@@ -66,7 +101,31 @@ export default function AutobusesPage() {
           >
             Editar
           </Button>
-          <Button variant="outlined" color="error" size="small">
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            onClick={async () => {
+              const confirmar = window.confirm("¿Seguro que deseas eliminar este autobús?");
+              if (!confirmar) return;
+              try {
+                await eliminarAutobus(params.row.id);
+                await registrarEventoAuditoria({
+                  usuarioId: usuario?.uid,
+                  usuarioNombre: usuario?.displayName ?? "Usuario",
+                  usuarioEmail: usuario?.email ?? "",
+                  rol: rol ?? null,
+                  modulo: "autobuses",
+                  accion: "eliminar",
+                  descripcion: `Eliminó el autobús ${params.row.placa || params.row.id}`,
+                });
+                await cargarDatos();
+              } catch (error) {
+                console.error(error);
+                alert("No se pudo eliminar el autobús");
+              }
+            }}
+          >
             Eliminar
           </Button>
         </Stack>
@@ -106,31 +165,54 @@ export default function AutobusesPage() {
   };
 
   const guardarAutobus = async (data: AutobusFormData) => {
-    if (autobusEditando) {
-      await actualizarAutobus(autobusEditando.id, {
-        numeroUnidad: data.numeroUnidad,
-        placa: data.placa,
-        modelo: data.modelo,
-        anio: Number(data.anio) || 0,
-        capacidad: Number(data.capacidad) || 0,
-        sucursalId: data.sucursalId,
-        estado: data.estado,
-      });
-    } else {
-      await crearAutobus({
-        numeroUnidad: data.numeroUnidad,
-        placa: data.placa,
-        modelo: data.modelo,
-        anio: Number(data.anio) || 0,
-        capacidad: Number(data.capacidad) || 0,
-        sucursalId: data.sucursalId,
-        estado: data.estado,
-        marca: data.modelo,
-      } as any);
+    try {
+      if (autobusEditando) {
+        await actualizarAutobus(autobusEditando.id, {
+          numeroUnidad: data.numeroUnidad,
+          placa: data.placa,
+          modelo: data.modelo,
+          anio: Number(data.anio) || 0,
+          capacidad: Number(data.capacidad) || 0,
+          sucursalId: data.sucursalId,
+          estado: data.estado,
+        });
+        await registrarEventoAuditoria({
+          usuarioId: usuario?.uid,
+          usuarioNombre: usuario?.displayName ?? "Usuario",
+          usuarioEmail: usuario?.email ?? "",
+          rol: rol ?? null,
+          modulo: "autobuses",
+          accion: "editar",
+          descripcion: `Editó el autobús ${data.placa || data.numeroUnidad}`,
+        });
+      } else {
+        await crearAutobus({
+          numeroUnidad: data.numeroUnidad,
+          placa: data.placa,
+          modelo: data.modelo,
+          anio: Number(data.anio) || 0,
+          capacidad: Number(data.capacidad) || 0,
+          sucursalId: data.sucursalId,
+          estado: data.estado,
+          marca: data.modelo,
+        } as any);
+        await registrarEventoAuditoria({
+          usuarioId: usuario?.uid,
+          usuarioNombre: usuario?.displayName ?? "Usuario",
+          usuarioEmail: usuario?.email ?? "",
+          rol: rol ?? null,
+          modulo: "autobuses",
+          accion: "crear",
+          descripcion: `Creó el autobús ${data.placa || data.numeroUnidad}`,
+        });
+      }
+      await cargarDatos();
+      setDialogAbierto(false);
+      setAutobusEditando(null);
+    } catch (error) {
+      console.error(error);
+      alert("No se pudo guardar el autobús");
     }
-    await cargarDatos();
-    setDialogAbierto(false);
-    setAutobusEditando(null);
   };
 
   const contenido = (
@@ -163,18 +245,28 @@ export default function AutobusesPage() {
         </Stack>
       </Stack>
 
+      {errorCarga && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {errorCarga}
+        </Alert>
+      )}
+
       <Paper elevation={3} sx={{ borderRadius: 3, p: 2 }}>
         <Box sx={{ height: 520, width: "100%" }}>
-          <DataGrid
-            rows={filas}
-            columns={columnas}
-            checkboxSelection
-            disableRowSelectionOnClick
-            pageSizeOptions={[5, 10, 25]}
-            initialState={{
-              pagination: { paginationModel: { pageSize: 10, page: 0 } },
-            }}
-          />
+          {cargandoDatos ? (
+            <Box p={3}>Cargando datos...</Box>
+          ) : (
+            <DataGrid
+              rows={filas}
+              columns={columnas}
+              checkboxSelection
+              disableRowSelectionOnClick
+              pageSizeOptions={[5, 10, 25]}
+              initialState={{
+                pagination: { paginationModel: { pageSize: 10, page: 0 } },
+              }}
+            />
+          )}
         </Box>
       </Paper>
 

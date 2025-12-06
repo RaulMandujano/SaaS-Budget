@@ -3,19 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import ProtectedLayout from "@/components/layout/ProtectedLayout";
 import PanelLayout from "@/components/layout/PanelLayout";
-import {
-  obtenerGastoPorSucursal,
-  obtenerGastoPorTipo,
-  obtenerGastoTotal,
-  obtenerTotalesSistema,
-} from "@/lib/reportes/metricas";
-import { obtenerSucursales } from "@/lib/firestore/sucursales";
-import { Box, Button, Card, CardContent, Container, Grid, Paper, Stack, Typography } from "@mui/material";
+import { obtenerTotalesSistema } from "@/lib/reportes/metricas";
+import { obtenerGastos } from "@/lib/firestore/gastos";
+import { Box, Button, Card, CardContent, Container, Grid, Paper, Stack, Typography, Alert } from "@mui/material";
 import MonetizationOnIcon from "@mui/icons-material/MonetizationOn";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import DirectionsBusIcon from "@mui/icons-material/DirectionsBus";
 import ApartmentIcon from "@mui/icons-material/Apartment";
-import MountedGuard from "@/components/system/MountedGuard";
+import PeopleIcon from "@mui/icons-material/People";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -27,83 +22,131 @@ import {
   ArcElement,
 } from "chart.js";
 import { Bar, Doughnut } from "react-chartjs-2";
+import MountedGuard from "@/components/system/MountedGuard";
+import { aplicarImpuesto, formatearMoneda, useConfiguracion } from "@/lib/configuracion/configuracion";
+import { useAuth } from "@/context/AuthContext";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ChartTitle, Tooltip, Legend, ArcElement);
 
+const categoriasBase = ["Combustible", "Mantenimiento", "Peajes", "Sueldos", "Otros"];
+
 export default function DashboardPage() {
+  const { configuracion } = useConfiguracion();
+  const { empresaActualId } = useAuth();
   const [totales, setTotales] = useState({ totalHistorico: 0, totalMes: 0 });
   const [totalesSistema, setTotalesSistema] = useState({
     totalAutobuses: 0,
     totalSucursales: 0,
+    totalChoferes: 0,
   });
-  const [gastoPorMes, setGastoPorMes] = useState<number[]>([
-    // TODO: conectar a Firestore real
-    18000, 22000, 19500, 24000, 26000, 25500, 27500, 30000, 29000, 31000, 33000, 34000,
-  ]);
-  const [gastoPorCategoria, setGastoPorCategoria] = useState<{ label: string; value: number }[]>([
-    // TODO: conectar a Firestore real
-    { label: "Combustible", value: 42000 },
-    { label: "Mantenimiento", value: 18000 },
-    { label: "Peajes", value: 9500 },
-    { label: "Sueldos", value: 38000 },
-    { label: "Otros", value: 7200 },
-  ]);
+  const [totalGastos, setTotalGastos] = useState(0);
+  const [gastoPorMes, setGastoPorMes] = useState<number[]>(() => Array(12).fill(0));
+  const [gastoPorCategoria, setGastoPorCategoria] = useState<{ label: string; value: number }[]>(() =>
+    categoriasBase.map((c) => ({ label: c, value: 0 })),
+  );
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const cargarDatos = async () => {
+      if (!empresaActualId) return;
       try {
-        const [totalesGasto, totSistema] = await Promise.all([
-          obtenerGastoTotal(),
-          obtenerTotalesSistema(),
-          obtenerGastoPorSucursal(),
-          obtenerGastoPorTipo(),
-          obtenerSucursales(),
+        setCargando(true);
+        setError("");
+        const [totSistema, listaGastos] = await Promise.all([
+          obtenerTotalesSistema(empresaActualId),
+          obtenerGastos(empresaActualId),
         ]);
-        setTotales(totalesGasto);
+
+        const totalHistorico = listaGastos.reduce((acc, gasto) => acc + (Number(gasto.monto) || 0), 0);
+        setTotalGastos(listaGastos.length);
+        const ahora = new Date();
+        const totalMes = listaGastos
+          .filter(
+            (g) =>
+              g.fecha &&
+              g.fecha.getMonth() === ahora.getMonth() &&
+              g.fecha.getFullYear() === ahora.getFullYear(),
+          )
+          .reduce((acc, gasto) => acc + (Number(gasto.monto) || 0), 0);
+
+        const mesesArr = Array(12).fill(0) as number[];
+        listaGastos.forEach((g) => {
+          if (g.fecha) {
+            const idx = g.fecha.getMonth();
+            mesesArr[idx] += Number(g.monto) || 0;
+          }
+        });
+
+        const mapaCategorias = new Map<string, number>();
+        categoriasBase.forEach((c) => mapaCategorias.set(c, 0));
+        listaGastos.forEach((g) => {
+          const tipo = categoriasBase.includes(g.tipo) ? g.tipo : "Otros";
+          mapaCategorias.set(tipo, (mapaCategorias.get(tipo) || 0) + (Number(g.monto) || 0));
+        });
+        const catArray = categoriasBase.map((c) => ({ label: c, value: mapaCategorias.get(c) || 0 }));
+
+        setTotales({ totalHistorico, totalMes });
         setTotalesSistema(totSistema);
-        // TODO: al tener métricas por mes y categoría, asignar setGastoPorMes y setGastoPorCategoria
+        setGastoPorMes(mesesArr);
+        setGastoPorCategoria(catArray);
       } catch (error) {
-        console.warn("Error al cargar métricas, usando valores por defecto", error);
+        console.warn("Error al cargar métricas de gastos", error);
+        setError("No se pudieron cargar las métricas. Intenta nuevamente.");
         setTotales({ totalHistorico: 0, totalMes: 0 });
-        setTotalesSistema({ totalAutobuses: 0, totalSucursales: 0 });
+        setGastoPorMes(Array(12).fill(0));
+        setGastoPorCategoria(categoriasBase.map((c) => ({ label: c, value: 0 })));
+        setTotalesSistema({ totalAutobuses: 0, totalSucursales: 0, totalChoferes: 0 });
+        setTotalGastos(0);
       } finally {
         setCargando(false);
       }
     };
 
     cargarDatos();
-  }, []);
+  }, [empresaActualId]);
 
-  const formatearMoneda = useMemo(
-    () => (valor: number) => `$${valor.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`,
-    [],
+  const formatearMonedaConfig = useMemo(
+    () => (valor: number) => formatearMoneda(aplicarImpuesto(valor, configuracion), configuracion),
+    [configuracion],
   );
 
   const cards = [
     {
       titulo: "Gasto Total Histórico",
-      valor: formatearMoneda(totales.totalHistorico),
+      valor: formatearMonedaConfig(totales.totalHistorico),
       icono: <MonetizationOnIcon sx={{ color: "#0ea5e9", fontSize: 36 }} />,
-      subtexto: "+8.4% vs mes anterior",
+      subtexto: "Acumulado general",
     },
     {
       titulo: "Gasto del Mes",
-      valor: formatearMoneda(totales.totalMes),
+      valor: formatearMonedaConfig(totales.totalMes),
       icono: <TrendingUpIcon sx={{ color: "#22c55e", fontSize: 36 }} />,
-      subtexto: "+3.2% vs mes anterior",
+      subtexto: "Actualizado al mes corriente",
     },
     {
       titulo: "Total de Autobuses",
       valor: totalesSistema.totalAutobuses,
       icono: <DirectionsBusIcon sx={{ color: "#a855f7", fontSize: 36 }} />,
-      subtexto: "+1.5% flota activa",
+      subtexto: "Flota registrada",
+    },
+    {
+      titulo: "Total de Gastos",
+      valor: totalGastos,
+      icono: <TrendingUpIcon sx={{ color: "#0ea5e9", fontSize: 36 }} />,
+      subtexto: "Registros de egresos",
+    },
+    {
+      titulo: "Total de Choferes",
+      valor: totalesSistema.totalChoferes,
+      icono: <PeopleIcon sx={{ color: "#10b981", fontSize: 36 }} />,
+      subtexto: "Operadores activos",
     },
     {
       titulo: "Total de Sucursales",
       valor: totalesSistema.totalSucursales,
       icono: <ApartmentIcon sx={{ color: "#f97316", fontSize: 36 }} />,
-      subtexto: "Cobertura nacional estable",
+      subtexto: "Cobertura nacional",
     },
   ];
 
@@ -115,13 +158,13 @@ export default function DashboardPage() {
       datasets: [
         {
           label: "Gasto por mes",
-          data: gastoPorMes,
+          data: gastoPorMes.map((monto) => aplicarImpuesto(monto, configuracion)),
           backgroundColor: "rgba(37, 99, 235, 0.7)",
           borderRadius: 8,
         },
       ],
     }),
-    [gastoPorMes],
+    [gastoPorMes, configuracion, meses],
   );
 
   const opcionesBarras = useMemo(
@@ -135,12 +178,12 @@ export default function DashboardPage() {
         y: {
           ticks: {
             callback: (value: number | string) =>
-              typeof value === "number" ? `$${value.toLocaleString("es-MX")}` : value,
+              typeof value === "number" ? formatearMoneda(value, configuracion) : value,
           },
         },
       },
     }),
-    [],
+    [configuracion],
   );
 
   const dataDonut = useMemo(
@@ -149,13 +192,13 @@ export default function DashboardPage() {
       datasets: [
         {
           label: "Distribución de gastos",
-          data: gastoPorCategoria.map((item) => item.value),
+          data: gastoPorCategoria.map((item) => aplicarImpuesto(item.value, configuracion)),
           backgroundColor: ["#2563eb", "#22c55e", "#f59e0b", "#a855f7", "#ef4444"],
           borderWidth: 1,
         },
       ],
     }),
-    [gastoPorCategoria],
+    [gastoPorCategoria, configuracion],
   );
 
   const opcionesDonut = useMemo(
@@ -193,7 +236,7 @@ export default function DashboardPage() {
                   Bienvenido de nuevo 👋
                 </Typography>
                 <Typography variant="h4" fontWeight={800}>
-                  Panel Ejecutivo Estrella Polar
+                  Panel Ejecutivo {configuracion.nombreEmpresa || "Estrella Polar"}
                 </Typography>
                 <Typography variant="body1" sx={{ opacity: 0.9 }}>
                   Monitorea en tiempo real tus métricas operativas y financieras. Obtén visibilidad total de gastos, flota y sucursales.
@@ -235,6 +278,12 @@ export default function DashboardPage() {
             </Grid>
           </Grid>
         </Paper>
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
+        )}
 
         {/* Métricas */}
         <Grid container spacing={3} mb={4}>
