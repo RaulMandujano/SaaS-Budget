@@ -25,6 +25,7 @@ import {
 import { Bar, Doughnut } from "react-chartjs-2";
 import { aplicarImpuesto, formatearMoneda, useConfiguracion } from "@/lib/configuracion/configuracion";
 import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ChartTitle, Tooltip, Legend, ArcElement);
 
@@ -33,6 +34,7 @@ const categoriasBase = ["Combustible", "Mantenimiento", "Peajes", "Sueldos", "Ot
 export default function DashboardPage() {
   const { configuracion } = useConfiguracion();
   const { empresaActualId } = useAuth();
+  const router = useRouter();
   const [totales, setTotales] = useState({ totalHistorico: 0, totalMes: 0 });
   const [totalesSistema, setTotalesSistema] = useState({
     totalAutobuses: 0,
@@ -259,24 +261,11 @@ export default function DashboardPage() {
                     textTransform: "none",
                     fontWeight: 700,
                   }}
+                  onClick={() => router.push("/reportes")}
                 >
                   Ver reporte general
                 </Button>
               </Stack>
-            </Grid>
-          <Grid size={{ xs: 12, md: 5 }}>
-              <Box
-                component="img"
-                src="/hero-dashboard.png"
-                alt="Dashboard ilustración"
-                sx={{
-                  width: "100%",
-                  maxWidth: 360,
-                  display: "block",
-                  ml: { md: "auto" },
-                  filter: "drop-shadow(0px 12px 32px rgba(0,0,0,0.25))",
-                }}
-              />
             </Grid>
           </Grid>
         </Paper>

@@ -9,6 +9,7 @@ import PanelLayout from "@/components/layout/PanelLayout";
 import { Box, Button, Paper, Stack, Typography, Alert } from "@mui/material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import MountedGuard from "@/components/system/MountedGuard";
+import { aplicarImpuesto, formatearMoneda, useConfiguracion } from "@/lib/configuracion/configuracion";
 import { useAuth } from "@/context/AuthContext";
 import { registrarEventoAuditoria } from "@/lib/auditoria/registrarEvento";
 import {
@@ -24,6 +25,7 @@ import RutaDialog, { RutaFormData } from "@/components/rutas/RutaDialog";
 export default function RutasPage() {
   const router = useRouter();
   const { usuario, rol, empresaActualId } = useAuth();
+  const { configuracion } = useConfiguracion();
   const [rutas, setRutas] = useState<Ruta[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [cargandoAuth, setCargandoAuth] = useState(true);
@@ -130,12 +132,7 @@ export default function RutasPage() {
       valueFormatter: (params: { value?: number | string | null }) => {
         const numero =
           typeof params.value === "number" ? params.value : Number(params.value) || 0;
-        return new Intl.NumberFormat("es-ES", {
-          style: "currency",
-          currency: "USD",
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        }).format(numero);
+        return formatearMoneda(numero, configuracion);
       },
     },
     {
