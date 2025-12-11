@@ -1,1 +1,3 @@
-export { createUserAdmin } from "./createUserAdmin";
+import { createUserAdmin } from "./createUserAdmin";
+
+export { createUserAdmin };
