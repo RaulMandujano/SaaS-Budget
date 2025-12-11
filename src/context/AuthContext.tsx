@@ -72,7 +72,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const snap = await getDoc(ref);
         if (snap.exists()) {
           const data = snap.data();
-          rol = (data.rol as RolUsuario | undefined) ?? null;
+          const valorRol = (data.rol as string | undefined) ?? null;
+          if (valorRol) {
+            const normalizado = valorRol.toLowerCase();
+            const rolesValidos: RolUsuario[] = ["admin", "finanzas", "operaciones", "superadmin"];
+            if (rolesValidos.includes(normalizado as RolUsuario)) {
+              rol = normalizado as RolUsuario;
+            }
+          }
           activo = data.activo !== false;
           empresaId = (data.empresaId as string | undefined) || null;
         }

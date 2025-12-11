@@ -9,15 +9,42 @@ import ProtectedLayout from "@/components/layout/ProtectedLayout";
 import PanelLayout from "@/components/layout/PanelLayout";
 import { obtenerSucursales, Sucursal } from "@/lib/firestore/sucursales";
 import { obtenerAutobuses, Autobus } from "@/lib/firestore/autobuses";
-import { crearGasto, eliminarGasto, obtenerGastos, Gasto } from "@/lib/firestore/gastos";
-import { Box, Button, Paper, Stack, TextField, Typography, Alert } from "@mui/material";
+import {
+  crearGasto,
+  crearGastoImportado,
+  eliminarGasto,
+  obtenerGastos,
+  Gasto,
+} from "@/lib/firestore/gastos";
+import ImportarExcel, { RegistroExcel } from "@/components/importacion/ImportarExcel";
+import {
+  Alert,
+  Box,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import MountedGuard from "@/components/system/MountedGuard";
 import GastoDialog, { GastoFormData } from "@/components/gastos/GastoDialog";
 import { useAuth } from "@/context/AuthContext";
 import { registrarEventoAuditoria } from "@/lib/auditoria/registrarEvento";
 import { aplicarImpuesto, formatearMoneda, useConfiguracion } from "@/lib/configuracion/configuracion";
-import { formatearFecha } from "@/lib/fechas";
+import { formatearFecha, normalizarFechaExcel } from "@/lib/fechas";
+
+const columnasExcelGastos = [
+  "fecha",
+  "concepto",
+  "categoria",
+  "monto",
+  "sucursal",
+  "autobus",
+];
 
 export default function GastosPage() {
   const router = useRouter();
@@ -32,6 +59,10 @@ export default function GastosPage() {
   const [errorCarga, setErrorCarga] = useState("");
   const [dialogAbierto, setDialogAbierto] = useState(false);
   const [gastoEditando, setGastoEditando] = useState<Gasto | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importExito, setImportExito] = useState("");
+  const [importCargando, setImportCargando] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (usuarioActual) => {
@@ -97,6 +128,12 @@ export default function GastosPage() {
     { field: "sucursal", headerName: "Sucursal", flex: 1, minWidth: 160 },
     { field: "autobus", headerName: "Autobús", flex: 1, minWidth: 140 },
     {
+      field: "source",
+      headerName: "Origen",
+      width: 120,
+      renderCell: (params) => (params.value === "importado" ? "Excel" : "Manual"),
+    },
+    {
       field: "acciones",
       headerName: "Acciones",
       sortable: false,
@@ -155,9 +192,10 @@ export default function GastosPage() {
         monto: formatearMoneda(aplicarImpuesto(gasto.monto, configuracion), configuracion),
         sucursal: mapaSucursales.get(gasto.sucursalId) ?? "Sucursal no encontrada",
         autobus: mapaAutobuses.get(gasto.autobusId) ?? "Autobús no encontrado",
+        source: gasto.source ?? "manual",
       }))
       .filter((row) =>
-        [row.fecha, row.concepto, row.categoria, row.sucursal, row.autobus, row.monto]
+        [row.fecha, row.concepto, row.categoria, row.sucursal, row.autobus, row.monto, row.source]
           .join(" ")
           .toLowerCase()
           .includes(filtro),
@@ -220,6 +258,72 @@ export default function GastosPage() {
     setGastoEditando(null);
   };
 
+  const abrirImportacion = () => {
+    setImportError("");
+    setImportExito("");
+    setImportDialogOpen(true);
+  };
+
+  const cerrarImportacion = () => {
+    setImportDialogOpen(false);
+  };
+
+  const manejarRegistrosImportados = async (registros: RegistroExcel[]) => {
+    if (!usuario || !empresaActualId) {
+      setImportError("Debes estar autenticado y tener una empresa seleccionada para importar.");
+      return;
+    }
+    setImportError("");
+    setImportExito("");
+    setImportCargando(true);
+    try {
+      let totalImportados = 0;
+      const valorATexto = (valor: unknown): string =>
+        valor === undefined || valor === null ? "" : String(valor);
+      for (const registro of registros) {
+        const fechaNormalizada = normalizarFechaExcel(registro.datos.fecha);
+        if (!fechaNormalizada) {
+          console.error(`Fecha inválida en fila ${registro.fila}`);
+          continue;
+        }
+        await crearGastoImportado(
+          {
+            fecha: fechaNormalizada,
+            descripcion: valorATexto(registro.datos.concepto),
+            tipo: valorATexto(registro.datos.categoria),
+            monto: Number(registro.datos.monto ?? 0) || 0,
+            sucursalId: valorATexto(registro.datos.sucursal),
+            autobusId: valorATexto(registro.datos.autobus),
+            usuarioId: usuario.uid,
+          },
+          empresaActualId,
+        );
+        totalImportados += 1;
+      }
+      if (!totalImportados) {
+        setImportError("No se importaron gastos. Revisa las fechas en la consola.");
+        return;
+      }
+      await registrarEventoAuditoria({
+        usuarioId: usuario.uid,
+        usuarioNombre: usuario.displayName ?? "Usuario",
+        usuarioEmail: usuario.email ?? "",
+        rol: rol ?? null,
+        modulo: "gastos",
+        accion: "crear",
+        descripcion: `Importó ${totalImportados} gasto(s) desde Excel.`,
+      });
+      setImportExito(`${totalImportados} gasto(s) importado(s) correctamente.`);
+      await cargarDatos(empresaActualId);
+      setImportDialogOpen(false);
+    } catch (error) {
+      console.error("Error al importar gastos", error);
+      setImportError("No se pudo completar la importación. Intenta de nuevo.");
+    } finally {
+      setImportCargando(false);
+    }
+  };
+
   const contenido = (
     <Box>
       <Stack
@@ -247,12 +351,30 @@ export default function GastosPage() {
           <Button variant="contained" color="primary" onClick={abrirCrear}>
             Nuevo Gasto
           </Button>
+          <Button
+            variant="outlined"
+            color="primary"
+            onClick={abrirImportacion}
+            disabled={!usuario || !empresaActualId || importCargando}
+          >
+            Importar Gastos desde Excel
+          </Button>
         </Stack>
       </Stack>
 
       {errorCarga && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {errorCarga}
+        </Alert>
+      )}
+      {importError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {importError}
+        </Alert>
+      )}
+      {importExito && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {importExito}
         </Alert>
       )}
 
@@ -283,6 +405,17 @@ export default function GastosPage() {
         sucursales={sucursales}
         autobuses={autobuses}
       />
+      <Dialog open={importDialogOpen} onClose={cerrarImportacion} fullWidth maxWidth="lg">
+        <DialogTitle>Importar Gastos desde Excel</DialogTitle>
+        <DialogContent dividers>
+          <ImportarExcel
+            titulo="Importar gastos desde Excel"
+            columnasEsperadas={columnasExcelGastos}
+            onImport={manejarRegistrosImportados}
+            onCancel={cerrarImportacion}
+          />
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 

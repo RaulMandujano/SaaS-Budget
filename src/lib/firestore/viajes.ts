@@ -1,50 +1,69 @@
-import { db } from "@/lib/firebase";
 import {
   addDoc,
   collection,
   deleteDoc,
   doc,
   getDocs,
+  orderBy,
   query,
-  serverTimestamp,
+  Timestamp,
   updateDoc,
   where,
-  orderBy,
-  limit,
+  DocumentData,
+  QueryDocumentSnapshot,
 } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { asegurarEmpresaId } from "@/lib/firestore/empresas";
 
 export interface Viaje {
   id: string;
-  autobusId: string;
+  fecha: Date;
   rutaId: string;
-  fechaSalida: Date | null;
+  autobusId: string;
+  estado: "programado" | "en_curso" | "completado";
   empresaId: string;
-  estado: string;
   createdAt?: Date | null;
 }
 
-export const obtenerViajes = async (empresaIdParam?: string): Promise<Viaje[]> => {
+const mapViaje = (docSnap: QueryDocumentSnapshot<DocumentData>): Viaje => {
+  const data = docSnap.data();
+  const fechaRaw = data.fecha;
+  const createdAtRaw = data.createdAt;
+  const fecha =
+    fechaRaw instanceof Timestamp ? fechaRaw.toDate() : fechaRaw?.toDate?.() ?? new Date();
+  const createdAt =
+    createdAtRaw instanceof Timestamp
+      ? createdAtRaw.toDate()
+      : createdAtRaw?.toDate?.() ?? null;
+
+  return {
+    id: docSnap.id,
+    fecha,
+    rutaId: data.rutaId ?? "",
+    autobusId: data.autobusId ?? "",
+    estado: (data.estado as Viaje["estado"]) ?? "programado",
+    empresaId: data.empresaId ?? "",
+    createdAt,
+  };
+};
+
+export const obtenerViajesPorMes = async (
+  mes: number,
+  año: number,
+  empresaIdParam?: string,
+): Promise<Viaje[]> => {
   const empresaId = asegurarEmpresaId(empresaIdParam);
+  const primerDia = new Date(año, mes - 1, 1);
+  const mesSiguiente = new Date(año, mes, 1);
   const q = query(
     collection(db, "viajes"),
     where("empresaId", "==", empresaId),
-    orderBy("fechaSalida", "desc"),
-    limit(200),
+    where("fecha", ">=", Timestamp.fromDate(primerDia)),
+    where("fecha", "<", Timestamp.fromDate(mesSiguiente)),
+    orderBy("fecha", "asc"),
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((registro) => {
-    const data = registro.data();
-    return {
-      id: registro.id,
-      autobusId: data.autobusId ?? "",
-      rutaId: data.rutaId ?? "",
-      fechaSalida: data.fechaSalida?.toDate?.() ?? null,
-      empresaId: data.empresaId ?? "",
-      estado: data.estado ?? "Programado",
-      createdAt: data.createdAt?.toDate?.() ?? null,
-    };
-  });
+  return snapshot.docs.map(mapViaje);
 };
 
 export const crearViaje = async (
@@ -52,11 +71,13 @@ export const crearViaje = async (
   empresaIdParam?: string,
 ): Promise<string> => {
   const empresaId = asegurarEmpresaId(empresaIdParam);
-  const ref = await addDoc(collection(db, "viajes"), {
+  const payload = {
     ...viaje,
     empresaId,
-    createdAt: serverTimestamp(),
-  });
+    fecha: Timestamp.fromDate(viaje.fecha),
+    createdAt: Timestamp.now(),
+  };
+  const ref = await addDoc(collection(db, "viajes"), payload);
   return ref.id;
 };
 
@@ -64,7 +85,14 @@ export const actualizarViaje = async (
   id: string,
   data: Partial<Omit<Viaje, "id" | "empresaId" | "createdAt">>,
 ): Promise<void> => {
-  await updateDoc(doc(db, "viajes", id), data);
+  const payload: Record<string, unknown> = { ...data };
+  if (data.fecha) {
+    payload.fecha = Timestamp.fromDate(data.fecha);
+  }
+  if (data.estado) {
+    payload.estado = data.estado;
+  }
+  await updateDoc(doc(db, "viajes", id), payload);
 };
 
 export const eliminarViaje = async (id: string): Promise<void> => {

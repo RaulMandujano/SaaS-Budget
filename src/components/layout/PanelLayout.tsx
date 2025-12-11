@@ -2,11 +2,14 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import {
   AppBar,
   Avatar,
   Box,
+  Button,
   Chip,
   CircularProgress,
   CssBaseline,
@@ -22,6 +25,7 @@ import {
   Toolbar,
   Typography,
 } from "@mui/material";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import MenuIcon from "@mui/icons-material/Menu";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import LocationCityIcon from "@mui/icons-material/LocationCity";
@@ -32,6 +36,7 @@ import AltRouteIcon from "@mui/icons-material/AltRoute";
 import AssessmentIcon from "@mui/icons-material/Assessment";
 import SettingsIcon from "@mui/icons-material/Settings";
 import GroupIcon from "@mui/icons-material/Group";
+import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import ProtectedRoute from "@/components/system/ProtectedRoute";
 import { useAuth, RolUsuario } from "@/context/AuthContext";
 import { useConfiguracion } from "@/lib/configuracion/configuracion";
@@ -47,6 +52,7 @@ export default function PanelLayout({ children }: PanelLayoutProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { rol, empresaActualId, cambiarEmpresaActual } = useAuth();
+  const router = useRouter();
   const { configuracion, cargandoConfiguracion } = useConfiguracion();
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
 
@@ -79,6 +85,7 @@ export default function PanelLayout({ children }: PanelLayoutProps) {
         { label: "Empresas", path: "/empresas", icon: <GroupIcon /> },
         { label: "Sucursales", path: "/sucursales", icon: <LocationCityIcon /> },
         { label: "Autobuses", path: "/autobuses", icon: <DirectionsBusIcon /> },
+        { label: "Viajes", path: "/viajes", icon: <CalendarMonthIcon /> },
         { label: "Choferes", path: "/choferes", icon: <PeopleIcon /> },
         { label: "Gastos", path: "/gastos", icon: <ReceiptLongIcon /> },
         { label: "Rutas", path: "/rutas", icon: <AltRouteIcon /> },
@@ -100,6 +107,7 @@ export default function PanelLayout({ children }: PanelLayoutProps) {
         { label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> },
         { label: "Sucursales", path: "/sucursales", icon: <LocationCityIcon /> },
         { label: "Autobuses", path: "/autobuses", icon: <DirectionsBusIcon /> },
+        { label: "Viajes", path: "/viajes", icon: <CalendarMonthIcon /> },
         { label: "Choferes", path: "/choferes", icon: <PeopleIcon /> },
       ];
     }
@@ -107,6 +115,7 @@ export default function PanelLayout({ children }: PanelLayoutProps) {
       { label: "Dashboard", path: "/dashboard", icon: <DashboardIcon /> },
       { label: "Sucursales", path: "/sucursales", icon: <LocationCityIcon /> },
       { label: "Autobuses", path: "/autobuses", icon: <DirectionsBusIcon /> },
+      { label: "Viajes", path: "/viajes", icon: <CalendarMonthIcon /> },
       { label: "Choferes", path: "/choferes", icon: <PeopleIcon /> },
       { label: "Gastos", path: "/gastos", icon: <ReceiptLongIcon /> },
       { label: "Rutas", path: "/rutas", icon: <AltRouteIcon /> },
@@ -131,6 +140,7 @@ export default function PanelLayout({ children }: PanelLayoutProps) {
     if (path.startsWith("/auditoria")) return ["admin", "superadmin"];
     if (path.startsWith("/sucursales")) return ["admin", "operaciones", "superadmin"];
     if (path.startsWith("/autobuses")) return ["admin", "operaciones", "superadmin"];
+    if (path.startsWith("/viajes")) return ["admin", "operaciones", "superadmin"];
     if (path.startsWith("/choferes")) return ["admin", "operaciones", "superadmin"];
     if (path.startsWith("/configuracion")) return ["admin", "superadmin"];
     return ["admin", "finanzas", "operaciones", "superadmin"];
@@ -138,6 +148,11 @@ export default function PanelLayout({ children }: PanelLayoutProps) {
 
   const rolesPermitidos = rolesPermitidosPorRuta(pathname || "");
   const enMantenimiento = configuracion.modoMantenimiento && rol !== "admin" && rol !== "superadmin";
+
+  const cerrarSesion = async () => {
+    await signOut(auth);
+    router.push("/login");
+  };
 
   const drawer = (
     <Box
@@ -205,6 +220,17 @@ export default function PanelLayout({ children }: PanelLayoutProps) {
           );
         })}
       </List>
+      <Box sx={{ px: 3, py: 3, mt: "auto" }}>
+        <Button
+          fullWidth
+          variant="contained"
+          color="error"
+          startIcon={<ExitToAppIcon />}
+          onClick={cerrarSesion}
+        >
+          Cerrar sesión
+        </Button>
+      </Box>
     </Box>
   );
 

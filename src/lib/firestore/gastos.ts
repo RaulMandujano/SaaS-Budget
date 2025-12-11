@@ -25,6 +25,10 @@ export interface Gasto {
   descripcion: string;
   monto: number;
   fecha: Date | null;
+  medioPago?: string;
+  observaciones?: string;
+  source?: string;
+  usuarioId?: string | null;
   createdAt?: Date | null;
 }
 
@@ -46,6 +50,10 @@ const mapGasto = (docSnap: QueryDocumentSnapshot<DocumentData>): Gasto => {
     monto: Number(data.monto ?? 0),
     fecha,
     createdAt,
+    medioPago: data.medioPago ?? "",
+    observaciones: data.observaciones ?? "",
+    source: data.source ?? "manual",
+    usuarioId: data.usuarioId ?? null,
   };
 };
 
@@ -75,9 +83,17 @@ export const crearGasto = async (
     fecha: gasto.fecha ? Timestamp.fromDate(gasto.fecha) : null,
     monto: Number(gasto.monto) || 0,
     createdAt: Timestamp.now(),
+    source: gasto.source ?? "manual",
   };
   const ref = await addDoc(collection(db, "gastos"), payload);
   return ref.id;
+};
+
+export const crearGastoImportado = async (
+  gasto: Omit<Gasto, "id" | "createdAt" | "empresaId">,
+  empresaIdParam?: string,
+): Promise<string> => {
+  return crearGasto({ ...gasto, source: "importado" }, empresaIdParam);
 };
 
 export const actualizarGasto = async (

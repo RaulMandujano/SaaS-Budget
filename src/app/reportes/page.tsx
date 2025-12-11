@@ -25,6 +25,7 @@ import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import MountedGuard from "@/components/system/MountedGuard";
 import type { WorkBook } from "xlsx";
 import { aplicarImpuesto, formatearMoneda, useConfiguracion } from "@/lib/configuracion/configuracion";
+import { useAuth } from "@/context/AuthContext";
 import { formatearFecha } from "@/lib/fechas";
 
 const categorias = ["Todas", "Combustible", "Mantenimiento", "Peajes", "Sueldos", "Otros"];
@@ -32,6 +33,7 @@ const categorias = ["Todas", "Combustible", "Mantenimiento", "Peajes", "Sueldos"
 export default function ReportesPage() {
   const router = useRouter();
   const { configuracion } = useConfiguracion();
+  const { empresaActualId } = useAuth();
   const [cargandoAuth, setCargandoAuth] = useState(true);
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
@@ -42,6 +44,7 @@ export default function ReportesPage() {
   const [sucursalFiltro, setSucursalFiltro] = useState("todas");
   const [autobusFiltro, setAutobusFiltro] = useState("todos");
   const [categoriaFiltro, setCategoriaFiltro] = useState("Todas");
+  const [sourceFiltro, setSourceFiltro] = useState("todos");
   const [archivoExcel, setArchivoExcel] = useState<Blob | null>(null);
 
   const [aplicarFiltros, setAplicarFiltros] = useState(false);
@@ -86,9 +89,20 @@ export default function ReportesPage() {
       if (sucursalFiltro !== "todas" && g.sucursalId !== sucursalFiltro) return false;
       if (autobusFiltro !== "todos" && g.autobusId !== autobusFiltro) return false;
       if (categoriaFiltro !== "Todas" && g.tipo !== categoriaFiltro) return false;
+      const origen = g.source ?? "manual";
+      if (sourceFiltro !== "todos" && origen !== sourceFiltro) return false;
       return true;
     });
-  }, [gastos, fechaInicio, fechaFin, sucursalFiltro, autobusFiltro, categoriaFiltro, aplicarFiltros]);
+  }, [
+    gastos,
+    fechaInicio,
+    fechaFin,
+    sucursalFiltro,
+    autobusFiltro,
+    categoriaFiltro,
+    sourceFiltro,
+    aplicarFiltros,
+  ]);
 
   const columnas: GridColDef[] = [
     { field: "fecha", headerName: "Fecha", flex: 1, minWidth: 130 },
@@ -97,6 +111,12 @@ export default function ReportesPage() {
     { field: "monto", headerName: `Monto (${configuracion.moneda || "MXN"})`, flex: 1, minWidth: 140 },
     { field: "sucursal", headerName: "Sucursal", flex: 1, minWidth: 160 },
     { field: "autobus", headerName: "Autobús", flex: 1, minWidth: 140 },
+    {
+      field: "source",
+      headerName: "Origen",
+      width: 120,
+      renderCell: (params) => (params.value === "importado" ? "Excel" : "Manual"),
+    },
   ];
 
   const filas = useMemo(() => {
@@ -108,6 +128,7 @@ export default function ReportesPage() {
       monto: formatearMoneda(aplicarImpuesto(gasto.monto, configuracion), configuracion),
       sucursal: sucursales.find((s) => s.id === gasto.sucursalId)?.nombre ?? "Sucursal no encontrada",
       autobus: autobuses.find((a) => a.id === gasto.autobusId)?.placa ?? "Autobús no encontrado",
+      source: gasto.source ?? "manual",
     }));
   }, [gastosFiltrados, sucursales, autobuses, configuracion]);
 
@@ -124,6 +145,7 @@ export default function ReportesPage() {
       Monto: row.monto,
       Sucursal: row.sucursal,
       Autobús: row.autobus,
+      Origen: row.source === "importado" ? "Excel" : "Manual",
     }));
     const hoja = XLSX.utils.json_to_sheet(rows);
     const libro: WorkBook = { SheetNames: ["Reporte"], Sheets: { Reporte: hoja } };
@@ -205,9 +227,10 @@ export default function ReportesPage() {
       row.monto,
       row.sucursal,
       row.autobus,
+      row.source === "importado" ? "Excel" : "Manual",
     ]);
     (docPdf as any).autoTable({
-      head: [["Fecha", "Concepto", "Categoría", "Monto", "Sucursal", "Autobús"]],
+      head: [["Fecha", "Concepto", "Categoría", "Monto", "Sucursal", "Autobús", "Origen"]],
       body,
       startY: 100,
       styles: { fontSize: 9, halign: "left" },
@@ -264,28 +287,43 @@ export default function ReportesPage() {
       alert("Ingresa un correo destino.");
       return;
     }
+    if (!empresaActualId) {
+      alert("Selecciona una empresa para poder enviar el reporte.");
+      return;
+    }
     setEnviandoCorreo(true);
     try {
       const { docPdf, nombreArchivo } = await crearDocumentoPdf();
       const arrayBuffer = docPdf.output("arraybuffer");
       const base64 = bufferToBase64(arrayBuffer);
+      const token = await auth.currentUser?.getIdToken?.();
 
       const urlFuncion =
         process.env.NEXT_PUBLIC_FUNCTIONS_URL ||
         "https://us-central1-saas-budget-b3c59.cloudfunctions.net/enviarReporte";
 
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
       const respuesta = await fetch(urlFuncion, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           emailDestino: correoDestino,
           base64,
           nombreArchivo,
           usuario: auth.currentUser?.email || null,
+          empresaId: empresaActualId,
         }),
       });
 
       if (!respuesta.ok) {
+        const errorTexto = await respuesta.text();
+        console.error("Fallo al enviar reporte:", errorTexto);
         throw new Error("No se pudo enviar el reporte");
       }
 
@@ -296,7 +334,7 @@ export default function ReportesPage() {
 
       alert("Reporte enviado por correo correctamente");
     } catch (error) {
-      console.error(error);
+      console.error("Error enviando reporte:", error);
       alert("No se pudo enviar el reporte. Intenta nuevamente.");
     } finally {
       setEnviandoCorreo(false);
@@ -371,6 +409,18 @@ export default function ReportesPage() {
                 ))}
               </Select>
             </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Origen</InputLabel>
+              <Select
+                label="Origen"
+                value={sourceFiltro}
+                onChange={(e) => setSourceFiltro(e.target.value)}
+              >
+                <MenuItem value="todos">Todos</MenuItem>
+                <MenuItem value="manual">Manual</MenuItem>
+                <MenuItem value="importado">Importado</MenuItem>
+              </Select>
+            </FormControl>
             <Button variant="contained" onClick={aplicarFiltrosHandler}>
               Aplicar filtros
             </Button>
@@ -400,7 +450,11 @@ export default function ReportesPage() {
             <Button variant="outlined" onClick={exportarPdf}>
               Exportar a PDF
             </Button>
-            <Button variant="contained" onClick={enviarReporteCorreo} disabled={enviandoCorreo}>
+            <Button
+              variant="contained"
+              onClick={enviarReporteCorreo}
+              disabled={enviandoCorreo || !empresaActualId}
+            >
               {enviandoCorreo ? "Enviando..." : "Enviar reporte por correo"}
             </Button>
           </Stack>
