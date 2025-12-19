@@ -85,6 +85,11 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (rolAdmin() || rolAuth() == "superadmin") && puedeAccederEmpresa();
     }
 
+    match /choferes/{choferId}/horarios/{horarioId} {
+      allow read: if isSignedIn() && (rolAdmin() || rolOperaciones() || rolAuth() == "superadmin") && puedeAccederEmpresa();
+      allow create, update, delete: if isSignedIn() && (rolAdmin() || rolAuth() == "superadmin") && mismaEmpresaNueva();
+    }
+
     match /mantenimientos/{docId} {
       allow read: if isSignedIn() && (rolAdmin() || rolOperaciones() || rolAuth() == "superadmin") && puedeAccederEmpresa();
       allow create, update: if isSignedIn() && (rolAdmin() || rolOperaciones() || rolAuth() == "superadmin") && mismaEmpresaNueva();

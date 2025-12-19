@@ -51,7 +51,7 @@ export const normalizarFechaExcel = (valor: unknown): Date | null => {
   }
 
   const isoMatch = texto.match(
-    /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?)?$/,
+    /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?)?$/,
   );
   if (isoMatch) {
     const year = Number(isoMatch[1]);
@@ -60,7 +60,9 @@ export const normalizarFechaExcel = (valor: unknown): Date | null => {
     return construirFechaValida(year, month, day);
   }
 
-  const slashMatch = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  const slashMatch = texto.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?$/,
+  );
   if (slashMatch) {
     const primer = Number(slashMatch[1]);
     const segundo = Number(slashMatch[2]);

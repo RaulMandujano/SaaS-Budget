@@ -12,6 +12,7 @@ import {
   TextField,
 } from "@mui/material";
 import { Autobus } from "@/lib/firestore/autobuses";
+import { Chofer } from "@/lib/firestore/choferes";
 import { Ruta } from "@/lib/firestore/rutas";
 import { Viaje } from "@/lib/firestore/viajes";
 
@@ -19,6 +20,7 @@ export interface ViajeFormData {
   fecha: string;
   rutaId: string;
   autobusId: string;
+  choferId: string;
   estado: Viaje["estado"];
 }
 
@@ -29,6 +31,7 @@ interface Props {
   initialData?: Viaje | null;
   rutas: Ruta[];
   autobuses: Autobus[];
+  choferes: Chofer[];
   fechaInicial?: Date | null;
   obtenerEtiquetaRuta?: (ruta: Ruta) => string;
 }
@@ -52,6 +55,7 @@ export default function ViajeDialog({
   initialData,
   rutas,
   autobuses,
+  choferes,
   fechaInicial,
   obtenerEtiquetaRuta,
 }: Props) {
@@ -61,6 +65,7 @@ export default function ViajeDialog({
         fecha: formatearFechaIso(initialData.fecha),
         rutaId: initialData.rutaId,
         autobusId: initialData.autobusId,
+        choferId: initialData.choferId ?? "",
         estado: initialData.estado,
       };
     }
@@ -69,6 +74,7 @@ export default function ViajeDialog({
       fecha: formatearFechaIso(fechaBase),
       rutaId: rutas[0]?.id ?? "",
       autobusId: autobuses[0]?.id ?? "",
+      choferId: choferes[0]?.id ?? "",
       estado: "programado",
     };
   };
@@ -81,6 +87,7 @@ export default function ViajeDialog({
     if (!form.fecha) nuevos.fecha = "Selecciona una fecha";
     if (!form.rutaId) nuevos.rutaId = "Selecciona una ruta";
     if (!form.autobusId) nuevos.autobusId = "Selecciona un autobús";
+    if (!form.choferId) nuevos.choferId = "Selecciona un chofer";
     if (!form.estado) nuevos.estado = "Selecciona un estado";
     setErrores(nuevos);
     return Object.keys(nuevos).length === 0;
@@ -91,7 +98,7 @@ export default function ViajeDialog({
     onSave(form);
   };
 
-  const puedeGuardar = rutas.length > 0 && autobuses.length > 0;
+  const puedeGuardar = rutas.length > 0 && autobuses.length > 0 && choferes.length > 0;
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
@@ -136,6 +143,21 @@ export default function ViajeDialog({
             {autobuses.map((autobus) => (
               <MenuItem key={autobus.id} value={autobus.id}>
                 {autobus.placa || autobus.numeroUnidad || "Autobús"}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            label="Chofer"
+            value={form.choferId}
+            onChange={(e) => setForm((prev) => ({ ...prev, choferId: e.target.value }))}
+            error={Boolean(errores.choferId)}
+            helperText={errores.choferId}
+            fullWidth
+          >
+            {choferes.map((chofer) => (
+              <MenuItem key={chofer.id} value={chofer.id}>
+                {chofer.nombre || "Chofer"}
               </MenuItem>
             ))}
           </TextField>

@@ -149,6 +149,10 @@ export default function UsuariosPage() {
   const handleCrearUsuario = async (data: UsuarioFormData) => {
     setCrearError("");
     setCrearSuccess("");
+    if (!empresaActualId) {
+      setCrearError("Selecciona una empresa antes de crear usuarios.");
+      return;
+    }
     setCrearCargando(true);
 
     try {
@@ -160,7 +164,7 @@ export default function UsuariosPage() {
         email: data.email,
         password: data.password,
         rol: data.rol,
-        empresaId: empresaActualId || "",
+        empresaId: empresaActualId,
       });
 
       const payload = result.data as {

@@ -15,6 +15,14 @@ import {
   Chofer,
   EstadoChofer,
 } from "@/lib/firestore/choferes";
+import { obtenerHorariosChofer } from "@/lib/firestore/horariosChofer";
+import {
+  coloresDisponibilidad,
+  construirFinDia,
+  construirInicioDia,
+  EstadoDisponibilidadChofer,
+  obtenerEstadoChoferEnFecha,
+} from "@/lib/choferes/horarios";
 import { Box, Button, Paper, Stack, TextField, Typography, Alert } from "@mui/material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import ChoferDialog, { ChoferFormData } from "@/components/choferes/ChoferDialog";
@@ -41,6 +49,7 @@ export default function ChoferesPage() {
   const [busqueda, setBusqueda] = useState("");
   const [choferes, setChoferes] = useState<ChoferRow[]>([]);
   const [autobuses, setAutobuses] = useState<Autobus[]>([]);
+  const [estadoHoy, setEstadoHoy] = useState<Record<string, EstadoDisponibilidadChofer>>({});
   const [dialogAbierto, setDialogAbierto] = useState(false);
   const [choferEditando, setChoferEditando] = useState<ChoferRow | null>(null);
 
@@ -60,6 +69,41 @@ export default function ChoferesPage() {
       cargarDatos();
     }
   }, [cargandoAuth, empresaActualId]);
+
+  useEffect(() => {
+    let activo = true;
+    const cargarDisponibilidad = async () => {
+      if (!choferes.length) {
+        setEstadoHoy({});
+        return;
+      }
+      const hoy = new Date();
+      const inicio = construirInicioDia(hoy);
+      const fin = construirFinDia(hoy);
+      const respuestas = await Promise.all(
+        choferes.map(async (chofer) => {
+          try {
+            const horarios = await obtenerHorariosChofer(chofer.id, inicio, fin);
+            const estado = obtenerEstadoChoferEnFecha(horarios, hoy);
+            return [chofer.id, estado] as const;
+          } catch (error) {
+            console.error("No se pudo calcular disponibilidad del chofer", error);
+            return [chofer.id, "SIN_DEFINIR"] as const;
+          }
+        }),
+      );
+      if (!activo) return;
+      const mapa: Record<string, EstadoDisponibilidadChofer> = {};
+      respuestas.forEach(([id, estado]) => {
+        mapa[id] = estado;
+      });
+      setEstadoHoy(mapa);
+    };
+    cargarDisponibilidad();
+    return () => {
+      activo = false;
+    };
+  }, [choferes]);
 
   const cargarDatos = async () => {
     if (!empresaActualId) {
@@ -211,6 +255,17 @@ export default function ChoferesPage() {
       minWidth: 180,
       renderCell: (params) => (
         <Stack direction="row" spacing={1}>
+          <Button
+            variant="contained"
+            color={
+              coloresDisponibilidad[estadoHoy[params.row.id] ?? "SIN_DEFINIR"]
+                .buttonColor
+            }
+            size="small"
+            onClick={() => router.push(`/choferes/${params.row.id}/horario`)}
+          >
+            Horario
+          </Button>
           <Button
             variant="outlined"
             size="small"

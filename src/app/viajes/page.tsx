@@ -11,6 +11,7 @@ import { useAuth } from "@/context/AuthContext";
 import { registrarEventoAuditoria } from "@/lib/auditoria/registrarEvento";
 import { obtenerRutas, Ruta } from "@/lib/firestore/rutas";
 import { obtenerAutobuses, Autobus } from "@/lib/firestore/autobuses";
+import { obtenerChoferes, Chofer } from "@/lib/firestore/choferes";
 import { obtenerSucursales, Sucursal } from "@/lib/firestore/sucursales";
 import {
   obtenerViajesPorMes,
@@ -20,6 +21,7 @@ import {
   eliminarViaje,
 } from "@/lib/firestore/viajes";
 import ViajeDialog, { ViajeFormData } from "@/components/viajes/ViajeDialog";
+import { isChoferDisponible } from "@/lib/choferes/horarios";
 import {
   Alert,
   Box,
@@ -52,6 +54,7 @@ export default function ViajesPage() {
   const [viajes, setViajes] = useState<Viaje[]>([]);
   const [rutas, setRutas] = useState<Ruta[]>([]);
   const [autobuses, setAutobuses] = useState<Autobus[]>([]);
+  const [choferes, setChoferes] = useState<Chofer[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [dialogAbierto, setDialogAbierto] = useState(false);
   const [viajeEditando, setViajeEditando] = useState<Viaje | null>(null);
@@ -74,6 +77,7 @@ export default function ViajesPage() {
       setErrorCarga("Selecciona una empresa para visualizar los viajes.");
       setRutas([]);
       setAutobuses([]);
+      setChoferes([]);
       setSucursales([]);
       setViajes([]);
       return;
@@ -85,14 +89,16 @@ export default function ViajesPage() {
       const empresaId = empresaActualId || undefined;
       const mes = mesReferencia.getMonth() + 1;
       const año = mesReferencia.getFullYear();
-      const [listaRutas, listaAutobuses, listaSucursales] = await Promise.all([
+      const [listaRutas, listaAutobuses, listaSucursales, listaChoferes] = await Promise.all([
         obtenerRutas(empresaId),
         obtenerAutobuses(empresaId),
         obtenerSucursales(empresaId),
+        obtenerChoferes(empresaId),
       ]);
       setRutas(listaRutas);
       setAutobuses(listaAutobuses);
       setSucursales(listaSucursales);
+      setChoferes(listaChoferes);
 
       try {
         const listaViajes = await obtenerViajesPorMes(mes, año, empresaId);
@@ -111,6 +117,7 @@ export default function ViajesPage() {
       setErrorCarga("No se pudieron cargar rutas/autobuses/sucursales. Intenta nuevamente.");
       setRutas([]);
       setAutobuses([]);
+      setChoferes([]);
       setSucursales([]);
       setViajes([]);
     } finally {
@@ -147,6 +154,14 @@ export default function ViajesPage() {
     });
     return mapa;
   }, [autobuses]);
+
+  const choferesMap = useMemo(() => {
+    const mapa: Record<string, Chofer> = {};
+    choferes.forEach((chofer) => {
+      mapa[chofer.id] = chofer;
+    });
+    return mapa;
+  }, [choferes]);
 
   const obtenerEtiquetaRuta = useCallback(
     (ruta: Ruta) => {
@@ -233,15 +248,19 @@ export default function ViajesPage() {
     }
     const fecha = new Date(data.fecha);
     try {
-    const rutaSeleccionada = rutaMap[data.rutaId];
-    const rutaEtiqueta = rutaSeleccionada ? obtenerEtiquetaRuta(rutaSeleccionada) : "Ruta";
+      const rutaSeleccionada = rutaMap[data.rutaId];
+      const rutaEtiqueta = rutaSeleccionada ? obtenerEtiquetaRuta(rutaSeleccionada) : "Ruta";
       const autob = autobusesMap[data.autobusId];
-      const descripcionBase = `${rutaEtiqueta} / ${autob?.placa || autob?.numeroUnidad || "Autobús"}`;
+      const chofer = choferesMap[data.choferId];
+      const descripcionBase = `${rutaEtiqueta} / ${autob?.placa || autob?.numeroUnidad || "Autobús"} / ${
+        chofer?.nombre || "Chofer"
+      }`;
       if (viajeEditando) {
         await actualizarViaje(viajeEditando.id, {
           fecha,
           rutaId: data.rutaId,
           autobusId: data.autobusId,
+          choferId: data.choferId,
           estado: data.estado,
         });
         await registrarEventoAuditoria({
@@ -254,11 +273,17 @@ export default function ViajesPage() {
           descripcion: `Editó el viaje ${descripcionBase}`,
         });
       } else {
+        const disponible = await isChoferDisponible(data.choferId, fecha);
+        if (!disponible) {
+          alert("El chofer no está disponible en la fecha seleccionada.");
+          return;
+        }
         await crearViaje(
           {
             fecha,
             rutaId: data.rutaId,
             autobusId: data.autobusId,
+            choferId: data.choferId,
             estado: data.estado,
           },
           empresaActualId,
@@ -277,7 +302,9 @@ export default function ViajesPage() {
       cerrarDialogo();
     } catch (error) {
       console.error("No se pudo guardar el viaje", error);
-      alert("No se pudo guardar el viaje.");
+      const mensaje =
+        error instanceof Error ? error.message : "No se pudo guardar el viaje.";
+      alert(mensaje);
     }
   };
 
@@ -438,6 +465,9 @@ export default function ViajesPage() {
                             {autob?.placa || autob?.numeroUnidad || "Autobús"}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
+                            {choferesMap[viaje.choferId]?.nombre || "Chofer no asignado"}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
                             Distancia {ruta?.distanciaKm.toFixed(1) ?? "0"} km ·
                             {ruta ? ` ${ruta.consumoGasolinaAprox.toFixed(1)} L aprox.` : ""}
                           </Typography>
@@ -486,6 +516,7 @@ export default function ViajesPage() {
           initialData={viajeEditando}
           rutas={rutas}
           autobuses={autobuses}
+          choferes={choferes}
           fechaInicial={fechaSeleccionada}
           obtenerEtiquetaRuta={obtenerEtiquetaRuta}
         />

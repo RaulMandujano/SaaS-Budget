@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -12,6 +11,7 @@ import {
   DocumentData,
   QueryDocumentSnapshot,
 } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "@/lib/firebase";
 import { asegurarEmpresaId } from "@/lib/firestore/empresas";
 
@@ -20,6 +20,7 @@ export interface Viaje {
   fecha: Date;
   rutaId: string;
   autobusId: string;
+  choferId: string;
   estado: "programado" | "en_curso" | "completado";
   empresaId: string;
   createdAt?: Date | null;
@@ -41,6 +42,7 @@ const mapViaje = (docSnap: QueryDocumentSnapshot<DocumentData>): Viaje => {
     fecha,
     rutaId: data.rutaId ?? "",
     autobusId: data.autobusId ?? "",
+    choferId: data.choferId ?? "",
     estado: (data.estado as Viaje["estado"]) ?? "programado",
     empresaId: data.empresaId ?? "",
     createdAt,
@@ -71,14 +73,18 @@ export const crearViaje = async (
   empresaIdParam?: string,
 ): Promise<string> => {
   const empresaId = asegurarEmpresaId(empresaIdParam);
-  const payload = {
+  const functions = getFunctions();
+  const callable = httpsCallable(functions, "crearViajeSeguro");
+  const result = await callable({
     ...viaje,
     empresaId,
-    fecha: Timestamp.fromDate(viaje.fecha),
-    createdAt: Timestamp.now(),
-  };
-  const ref = await addDoc(collection(db, "viajes"), payload);
-  return ref.id;
+    fecha: viaje.fecha.toISOString(),
+  });
+  const data = result.data as { id?: string };
+  if (!data?.id) {
+    throw new Error("No se pudo crear el viaje.");
+  }
+  return data.id;
 };
 
 export const actualizarViaje = async (

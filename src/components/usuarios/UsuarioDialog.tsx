@@ -14,7 +14,7 @@ import {
 } from "@mui/material";
 import { RolUsuario } from "@/context/AuthContext";
 
-const ROLES_USUARIO: RolUsuario[] = ["admin", "operaciones"];
+const ROLES_USUARIO: RolUsuario[] = ["admin", "finanzas", "operaciones"];
 
 export interface UsuarioFormData {
   nombre: string;

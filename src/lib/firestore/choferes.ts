@@ -1,6 +1,7 @@
 import {
   collection,
   getDocs,
+  getDoc,
   addDoc,
   doc,
   updateDoc,
@@ -61,6 +62,12 @@ export const obtenerChoferes = async (empresaIdParam?: string): Promise<Chofer[]
     const bTime = b.createdAt?.getTime?.() ?? 0;
     return bTime - aTime;
   });
+};
+
+export const obtenerChofer = async (id: string): Promise<Chofer | null> => {
+  const snap = await getDoc(doc(db, "choferes", id));
+  if (!snap.exists()) return null;
+  return mapChofer(snap as QueryDocumentSnapshot<DocumentData>);
 };
 
 export const crearChofer = async (

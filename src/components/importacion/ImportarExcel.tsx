@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import { normalizarFechaExcel } from "@/lib/fechas";
+import { canonizarEncabezadoExcel, parsearMontoExcel } from "@/lib/importacion/excel";
 
 export interface RegistroExcel {
   fila: number;
@@ -123,24 +124,20 @@ export default function ImportarExcel({ columnasEsperadas, titulo, onImport, onC
         throw new Error("La hoja seleccionada está vacía.");
       }
       const encabezadoRaw = filasRaw[0] as Array<unknown>;
-      const encabezados = encabezadoRaw.map((celda) => String(celda ?? "").trim());
-      const encabezadosNormalizados = encabezados.map((valor) => valor.toLowerCase());
+      const encabezadosCanon = encabezadoRaw.map((celda) => canonizarEncabezadoExcel(celda));
 
-      const faltantes = columnasEsperadas.filter(
-        (columna) => !encabezadosNormalizados.includes(columna.toLowerCase()),
-      );
-      const extras = encabezadosNormalizados.filter(
-        (valor) => !columnasEsperadas.map((col) => col.toLowerCase()).includes(valor),
-      );
-      if (faltantes.length || extras.length || encabezados.length !== columnasEsperadas.length) {
+      const faltantes = columnasEsperadas.filter((columna) => !encabezadosCanon.includes(columna));
+      if (faltantes.length) {
         throw new Error(
-          `Las columnas deben coincidir exactamente con: ${columnasEsperadas.join(", ")}.`,
+          `Faltan columnas obligatorias: ${faltantes.join(", ")}.`,
         );
       }
 
       const mapaIndices = new Map<string, number>();
-      encabezadosNormalizados.forEach((valor, indice) => {
-        mapaIndices.set(valor, indice);
+      encabezadosCanon.forEach((valor, indice) => {
+        if (columnasEsperadas.includes(valor) && !mapaIndices.has(valor)) {
+          mapaIndices.set(valor, indice);
+        }
       });
 
       const registrosProcesados: RegistroProcesado[] = filasRaw.slice(1).map((filaRaw, indice) => {
@@ -170,8 +167,8 @@ export default function ImportarExcel({ columnasEsperadas, titulo, onImport, onC
             }
           }
           if (columna === "monto") {
-            const monto = Number(valor);
-            if (Number.isNaN(monto)) {
+            const monto = parsearMontoExcel(valor);
+            if (monto === null) {
               erroresFila.push("Monto inválido");
             }
           }

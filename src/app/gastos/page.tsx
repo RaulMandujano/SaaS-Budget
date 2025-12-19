@@ -36,6 +36,7 @@ import { useAuth } from "@/context/AuthContext";
 import { registrarEventoAuditoria } from "@/lib/auditoria/registrarEvento";
 import { aplicarImpuesto, formatearMoneda, useConfiguracion } from "@/lib/configuracion/configuracion";
 import { formatearFecha, normalizarFechaExcel } from "@/lib/fechas";
+import { normalizarTextoExcel, parsearMontoExcel } from "@/lib/importacion/excel";
 
 const columnasExcelGastos = [
   "fecha",
@@ -117,6 +118,25 @@ export default function GastosPage() {
   const mapaAutobuses = useMemo(() => {
     const mapa = new Map<string, string>();
     autobuses.forEach((a) => mapa.set(a.id, a.numeroUnidad));
+    return mapa;
+  }, [autobuses]);
+
+  const mapaSucursalesImport = useMemo(() => {
+    const mapa = new Map<string, string>();
+    sucursales.forEach((s) => {
+      mapa.set(normalizarTextoExcel(s.id), s.id);
+      mapa.set(normalizarTextoExcel(s.nombre), s.id);
+    });
+    return mapa;
+  }, [sucursales]);
+
+  const mapaAutobusesImport = useMemo(() => {
+    const mapa = new Map<string, string>();
+    autobuses.forEach((a) => {
+      mapa.set(normalizarTextoExcel(a.id), a.id);
+      mapa.set(normalizarTextoExcel(a.numeroUnidad), a.id);
+      mapa.set(normalizarTextoExcel(a.placa), a.id);
+    });
     return mapa;
   }, [autobuses]);
 
@@ -278,12 +298,30 @@ export default function GastosPage() {
     setImportCargando(true);
     try {
       let totalImportados = 0;
+      const errores: string[] = [];
       const valorATexto = (valor: unknown): string =>
         valor === undefined || valor === null ? "" : String(valor);
       for (const registro of registros) {
         const fechaNormalizada = normalizarFechaExcel(registro.datos.fecha);
         if (!fechaNormalizada) {
-          console.error(`Fecha inválida en fila ${registro.fila}`);
+          errores.push(`Fila ${registro.fila}: fecha inválida`);
+          continue;
+        }
+        const monto = parsearMontoExcel(registro.datos.monto);
+        if (monto === null) {
+          errores.push(`Fila ${registro.fila}: monto inválido`);
+          continue;
+        }
+        const sucursalTexto = valorATexto(registro.datos.sucursal);
+        const sucursalId = mapaSucursalesImport.get(normalizarTextoExcel(sucursalTexto));
+        if (!sucursalId) {
+          errores.push(`Fila ${registro.fila}: sucursal no encontrada (${sucursalTexto || "vacía"})`);
+          continue;
+        }
+        const autobusTexto = valorATexto(registro.datos.autobus);
+        const autobusId = mapaAutobusesImport.get(normalizarTextoExcel(autobusTexto));
+        if (!autobusId) {
+          errores.push(`Fila ${registro.fila}: autobús no encontrado (${autobusTexto || "vacío"})`);
           continue;
         }
         await crearGastoImportado(
@@ -291,9 +329,9 @@ export default function GastosPage() {
             fecha: fechaNormalizada,
             descripcion: valorATexto(registro.datos.concepto),
             tipo: valorATexto(registro.datos.categoria),
-            monto: Number(registro.datos.monto ?? 0) || 0,
-            sucursalId: valorATexto(registro.datos.sucursal),
-            autobusId: valorATexto(registro.datos.autobus),
+            monto,
+            sucursalId,
+            autobusId,
             usuarioId: usuario.uid,
           },
           empresaActualId,
@@ -301,7 +339,12 @@ export default function GastosPage() {
         totalImportados += 1;
       }
       if (!totalImportados) {
-        setImportError("No se importaron gastos. Revisa las fechas en la consola.");
+        if (errores.length) {
+          console.warn("Importación omitió filas:", errores);
+          setImportError(`No se importaron gastos. ${errores[0]}`);
+        } else {
+          setImportError("No se importaron gastos. Revisa los datos del archivo.");
+        }
         return;
       }
       await registrarEventoAuditoria({
@@ -314,6 +357,10 @@ export default function GastosPage() {
         descripcion: `Importó ${totalImportados} gasto(s) desde Excel.`,
       });
       setImportExito(`${totalImportados} gasto(s) importado(s) correctamente.`);
+      if (errores.length) {
+        console.warn("Importación omitió filas:", errores);
+        setImportError(`Se omitieron ${errores.length} fila(s). ${errores[0]}`);
+      }
       await cargarDatos(empresaActualId);
       setImportDialogOpen(false);
     } catch (error) {

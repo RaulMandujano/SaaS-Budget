@@ -36,14 +36,26 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.whatsappWebhook = void 0;
+exports.crearViajeSeguro = exports.createUserAdmin = exports.whatsappWebhook = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 const node_fetch_1 = __importDefault(require("node-fetch"));
 admin.initializeApp();
+// === CONFIG ===
 const VERIFY_TOKEN = "estrella-polar-webhook";
-// ⚠️ CAMBIA SOLO ESTE VALOR
-const PHONE_NUMBER_ID = "13853353009";
+function getWhatsAppConfig() {
+    const config = functions.config();
+    const whatsapp = (config && config.whatsapp) || {};
+    const phoneNumberId = whatsapp.phone_id || process.env.WHATSAPP_PHONE_ID || "";
+    const token = whatsapp.token || process.env.WHATSAPP_TOKEN || "";
+    if (!phoneNumberId || !token) {
+        throw new Error("Missing WhatsApp config. Set firebase functions config " +
+            "(whatsapp.phone_id, whatsapp.token) or env vars " +
+            "WHATSAPP_PHONE_ID and WHATSAPP_TOKEN.");
+    }
+    return { phoneNumberId, token };
+}
+// === MENÚ ===
 const MENU_TEXT = `Hola 👋
 
 ¿Qué deseas hacer?
@@ -52,11 +64,11 @@ const MENU_TEXT = `Hola 👋
 3️⃣ Ayuda
 
 Responde con el número.`;
-// 🔹 Helper para enviar mensajes por WhatsApp
+// === ENVIAR MENSAJE ===
 async function sendWhatsAppMessage(to, text) {
-    const token = functions.config().whatsapp.token;
-    const url = `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`;
-    await (0, node_fetch_1.default)(url, {
+    const { phoneNumberId, token } = getWhatsAppConfig();
+    const url = `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`;
+    const response = await (0, node_fetch_1.default)(url, {
         method: "POST",
         headers: {
             Authorization: `Bearer ${token}`,
@@ -69,67 +81,68 @@ async function sendWhatsAppMessage(to, text) {
             text: { body: text },
         }),
     });
+    const data = await response.json();
+    console.log("📤 WhatsApp API response:", data);
 }
+// === WEBHOOK ===
 exports.whatsappWebhook = functions.https.onRequest(async (req, res) => {
-    // 🔹 VERIFICACIÓN DE META (GET)
+    var _a, _b, _c, _d;
+    // === VERIFICACIÓN META ===
     if (req.method === "GET") {
         const mode = req.query["hub.mode"];
         const token = req.query["hub.verify_token"];
         const challenge = req.query["hub.challenge"];
         if (mode === "subscribe" && token === VERIFY_TOKEN) {
-            console.log("✅ Webhook verificado");
+            console.log("✅ Webhook verificado por Meta");
             res.status(200).send(challenge);
             return;
         }
-        else {
-            res.sendStatus(403);
-            return;
-        }
+        res.sendStatus(403);
+        return;
     }
-    // 🔹 MENSAJES ENTRANTES (POST)
+    // === EVENTOS ===
     if (req.method === "POST") {
         try {
-            const entry = req.body.entry?.[0];
-            const change = entry?.changes?.[0];
-            const value = change?.value;
-            const message = value?.messages?.[0];
-            if (!message || !message.from) {
+            const entry = (_a = req.body.entry) === null || _a === void 0 ? void 0 : _a[0];
+            const change = (_b = entry === null || entry === void 0 ? void 0 : entry.changes) === null || _b === void 0 ? void 0 : _b[0];
+            const value = change === null || change === void 0 ? void 0 : change.value;
+            // 👇 OJO AQUÍ
+            const message = (_c = value === null || value === void 0 ? void 0 : value.messages) === null || _c === void 0 ? void 0 : _c[0];
+            // Si NO es mensaje de usuario → solo ACK
+            if (!message || !message.from || !((_d = message.text) === null || _d === void 0 ? void 0 : _d.body)) {
+                console.log("ℹ️ Evento sin mensaje de texto");
                 res.sendStatus(200);
                 return;
             }
             const from = message.from;
-            const text = message.text?.body;
-            console.log("📩 MENSAJE WHATSAPP");
+            const text = message.text.body;
+            console.log("📩 MENSAJE RECIBIDO");
             console.log("De:", from);
             console.log("Texto:", text);
-            // 🔹 Guardar / resetear sesión
+            // === SESIÓN ===
             const db = admin.firestore();
             const sessionRef = db.collection("whatsapp_sessions").doc(from);
-            const sessionSnapshot = await sessionRef.get();
-            if (!sessionSnapshot.exists) {
-                await sessionRef.set({
-                    phone: from,
-                    state: "MENU_PRINCIPAL",
-                    temp: {},
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                });
-            }
-            else {
-                await sessionRef.update({
-                    state: "MENU_PRINCIPAL",
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                });
-            }
-            // 🔹 RESPUESTA REAL POR WHATSAPP
+            await sessionRef.set({
+                phone: from,
+                state: "MENU_PRINCIPAL",
+                lastMessage: text,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            // === RESPUESTA ===
             await sendWhatsAppMessage(from, MENU_TEXT);
             res.sendStatus(200);
             return;
         }
         catch (error) {
-            console.error("❌ Error procesando mensaje:", error);
+            console.error("❌ Error webhook:", error);
             res.sendStatus(200);
             return;
         }
     }
     res.sendStatus(200);
+    return;
 });
+var createUserAdmin_1 = require("./createUserAdmin");
+Object.defineProperty(exports, "createUserAdmin", { enumerable: true, get: function () { return createUserAdmin_1.createUserAdmin; } });
+var crearViajeSeguro_1 = require("./crearViajeSeguro");
+Object.defineProperty(exports, "crearViajeSeguro", { enumerable: true, get: function () { return crearViajeSeguro_1.crearViajeSeguro; } });
