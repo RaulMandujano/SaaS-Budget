@@ -1,140 +1,80 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import fetch from "node-fetch";
+import * as querystring from "querystring";
 
 admin.initializeApp();
 
-// === CONFIG ===
-const VERIFY_TOKEN = "estrella-polar-webhook";
+export const slackWebhook = functions.https.onRequest((req, res) => {
+  try {
+    /* =================================
+       SLASH COMMANDS (/gasto)
+    ================================== */
+    if (
+      req.headers["content-type"] ===
+      "application/x-www-form-urlencoded"
+    ) {
+      const body = querystring.parse(req.rawBody.toString());
 
-type WhatsAppConfig = {
-  phoneNumberId: string;
-  token: string;
-};
+      const command = body.command as string;
+      const text = body.text as string;
+      const channel = body.channel_id as string;
+      const user = body.user_id as string;
 
-function getWhatsAppConfig(): WhatsAppConfig {
-  const config = functions.config();
-  const whatsapp = (config && config.whatsapp) || {};
-  const phoneNumberId =
-    whatsapp.phone_id || process.env.WHATSAPP_PHONE_ID || "";
-  const token = whatsapp.token || process.env.WHATSAPP_TOKEN || "";
+      console.log("⚡ Slash command recibido:", {
+        command,
+        text,
+        channel,
+        user,
+      });
 
-  if (!phoneNumberId || !token) {
-    throw new Error(
-      "Missing WhatsApp config. Set firebase functions config " +
-        "(whatsapp.phone_id, whatsapp.token) or env vars " +
-        "WHATSAPP_PHONE_ID and WHATSAPP_TOKEN."
-    );
-  }
-
-  return { phoneNumberId, token };
-}
-
-// === MENÚ ===
-const MENU_TEXT = `Hola 👋
-
-¿Qué deseas hacer?
-1️⃣ Registrar gasto
-2️⃣ Ver reportes
-3️⃣ Ayuda
-
-Responde con el número.`;
-
-// === ENVIAR MENSAJE ===
-async function sendWhatsAppMessage(to: string, text: string) {
-  const { phoneNumberId, token } = getWhatsAppConfig();
-
-  const url = `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to,
-      type: "text",
-      text: { body: text },
-    }),
-  });
-
-  const data = await response.json();
-  console.log("📤 WhatsApp API response:", data);
-}
-
-// === WEBHOOK ===
-export const whatsappWebhook = functions.https.onRequest(async (req, res) => {
-  // === VERIFICACIÓN META ===
-  if (req.method === "GET") {
-    const mode = req.query["hub.mode"];
-    const token = req.query["hub.verify_token"];
-    const challenge = req.query["hub.challenge"];
-
-    if (mode === "subscribe" && token === VERIFY_TOKEN) {
-      console.log("✅ Webhook verificado por Meta");
-      res.status(200).send(challenge);
-      return;
-    }
-
-    res.sendStatus(403);
-    return;
-  }
-
-  // === EVENTOS ===
-  if (req.method === "POST") {
-    try {
-      const entry = req.body.entry?.[0];
-      const change = entry?.changes?.[0];
-      const value = change?.value;
-
-      // 👇 OJO AQUÍ
-      const message = value?.messages?.[0];
-
-      // Si NO es mensaje de usuario → solo ACK
-      if (!message || !message.from || !message.text?.body) {
-        console.log("ℹ️ Evento sin mensaje de texto");
-        res.sendStatus(200);
+      if (command === "/gasto") {
+        // 👉 Respuesta inmediata (OBLIGATORIA)
+        res.status(200).json({
+          response_type: "ephemeral",
+          text: `🧾 *Registro de gasto*\n\nEscribiste:\n> ${text}\n\n(Próximo paso: parsear monto, concepto y autobús)`,
+        });
         return;
       }
 
-      const from = message.from;
-      const text = message.text.body;
-
-      console.log("📩 MENSAJE RECIBIDO");
-      console.log("De:", from);
-      console.log("Texto:", text);
-
-      // === SESIÓN ===
-      const db = admin.firestore();
-      const sessionRef = db.collection("whatsapp_sessions").doc(from);
-
-      await sessionRef.set(
-        {
-          phone: from,
-          state: "MENU_PRINCIPAL",
-          lastMessage: text,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      // === RESPUESTA ===
-      await sendWhatsAppMessage(from, MENU_TEXT);
-
-      res.sendStatus(200);
-      return;
-    } catch (error) {
-      console.error("❌ Error webhook:", error);
-      res.sendStatus(200);
+      res.status(200).send();
       return;
     }
+
+    /* =================================
+       EVENT SUBSCRIPTIONS (mensajes normales)
+    ================================== */
+
+    // Verificación inicial de Slack
+    if (req.body?.type === "url_verification") {
+      res.status(200).send(req.body.challenge);
+      return;
+    }
+
+    const event = req.body?.event;
+
+    if (!event || event.type !== "message" || event.subtype) {
+      res.status(200).send("OK");
+      return;
+    }
+
+    const { text, user, channel } = event;
+
+    console.log("📩 Slack mensaje normal:", {
+      text,
+      user,
+      channel,
+    });
+
+    admin.firestore().collection("slack_messages").add({
+      text,
+      user,
+      channel,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.status(200).send("OK");
+  } catch (error) {
+    console.error("❌ Error en slackWebhook:", error);
+    res.status(500).send("Error");
   }
-
-  res.sendStatus(200);
-  return;
 });
-
-export { createUserAdmin } from "./createUserAdmin";
-export { crearViajeSeguro } from "./crearViajeSeguro";
