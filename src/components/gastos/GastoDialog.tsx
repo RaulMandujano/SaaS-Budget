@@ -74,7 +74,7 @@ export default function GastoDialog({ open, onClose, onSave, initialData, sucurs
   const validar = () => {
     const nuevos: Record<string, string> = {};
     if (!form.fecha) nuevos.fecha = "La fecha es obligatoria";
-    if (!form.concepto.trim()) nuevos.concepto = "El concepto es obligatorio";
+    if (!form.concepto.trim()) nuevos.concepto = "La descripción es obligatoria";
     if (!form.categoria.trim()) nuevos.categoria = "La categoría es obligatoria";
     if (!form.monto.trim() || isNaN(Number(form.monto))) nuevos.monto = "El monto debe ser numérico";
     if (!form.sucursalId) nuevos.sucursalId = "Selecciona una sucursal";
@@ -111,14 +111,6 @@ export default function GastoDialog({ open, onClose, onSave, initialData, sucurs
             fullWidth
           />
           <TextField
-            label="Concepto"
-            value={form.concepto}
-            onChange={(e) => setForm((p) => ({ ...p, concepto: e.target.value }))}
-            error={Boolean(errores.concepto)}
-            helperText={errores.concepto}
-            fullWidth
-          />
-          <TextField
             select
             label="Categoría"
             value={form.categoria}
@@ -133,6 +125,14 @@ export default function GastoDialog({ open, onClose, onSave, initialData, sucurs
               </MenuItem>
             ))}
           </TextField>
+          <TextField
+            label="Descripción"
+            value={form.concepto}
+            onChange={(e) => setForm((p) => ({ ...p, concepto: e.target.value }))}
+            error={Boolean(errores.concepto)}
+            helperText={errores.concepto}
+            fullWidth
+          />
           <TextField
             label="Monto"
             value={form.monto}

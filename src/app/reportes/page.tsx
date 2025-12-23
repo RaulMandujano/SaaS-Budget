@@ -105,9 +105,9 @@ export default function ReportesPage() {
   ]);
 
   const columnas: GridColDef[] = [
-    { field: "fecha", headerName: "Fecha", flex: 1, minWidth: 130 },
-    { field: "concepto", headerName: "Concepto", flex: 1.2, minWidth: 160 },
     { field: "categoria", headerName: "Categoría", flex: 1, minWidth: 140 },
+    { field: "concepto", headerName: "Descripción", flex: 1.2, minWidth: 160 },
+    { field: "fecha", headerName: "Fecha", flex: 1, minWidth: 130 },
     { field: "monto", headerName: `Monto (${configuracion.moneda || "MXN"})`, flex: 1, minWidth: 140 },
     { field: "sucursal", headerName: "Sucursal", flex: 1, minWidth: 160 },
     { field: "autobus", headerName: "Autobús", flex: 1, minWidth: 140 },
@@ -139,9 +139,9 @@ export default function ReportesPage() {
   const exportarExcel = async () => {
     const XLSX = await import("xlsx");
     const rows = filas.map((row) => ({
-      Fecha: row.fecha,
-      Concepto: row.concepto,
       Categoría: row.categoria,
+      Descripción: row.concepto,
+      Fecha: row.fecha,
       Monto: row.monto,
       Sucursal: row.sucursal,
       Autobús: row.autobus,
@@ -221,16 +221,16 @@ export default function ReportesPage() {
     (docPdf as any).text(`Fecha de generación: ${fechaTexto}`, docPdf.internal.pageSize.getWidth() - 180, 30);
 
     const body = filas.map((row) => [
-      row.fecha,
-      row.concepto,
       row.categoria,
+      row.concepto,
+      row.fecha,
       row.monto,
       row.sucursal,
       row.autobus,
       row.source === "importado" ? "Excel" : "Manual",
     ]);
     (docPdf as any).autoTable({
-      head: [["Fecha", "Concepto", "Categoría", "Monto", "Sucursal", "Autobús", "Origen"]],
+      head: [["Categoría", "Descripción", "Fecha", "Monto", "Sucursal", "Autobús", "Origen"]],
       body,
       startY: 100,
       styles: { fontSize: 9, halign: "left" },

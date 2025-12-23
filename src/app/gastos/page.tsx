@@ -40,8 +40,8 @@ import { normalizarTextoExcel, parsearMontoExcel } from "@/lib/importacion/excel
 
 const columnasExcelGastos = [
   "fecha",
-  "concepto",
   "categoria",
+  "descripcion",
   "monto",
   "sucursal",
   "autobus",
@@ -141,9 +141,9 @@ export default function GastosPage() {
   }, [autobuses]);
 
   const columnas: GridColDef[] = [
-    { field: "fecha", headerName: "Fecha", flex: 1, minWidth: 130 },
-    { field: "concepto", headerName: "Concepto", flex: 1.2, minWidth: 160 },
     { field: "categoria", headerName: "Categoría", flex: 1, minWidth: 140 },
+    { field: "concepto", headerName: "Descripción", flex: 1.2, minWidth: 160 },
+    { field: "fecha", headerName: "Fecha", flex: 1, minWidth: 130 },
     { field: "monto", headerName: `Monto (${configuracion.moneda || "MXN"})`, flex: 1, minWidth: 140 },
     { field: "sucursal", headerName: "Sucursal", flex: 1, minWidth: 160 },
     { field: "autobus", headerName: "Autobús", flex: 1, minWidth: 140 },
@@ -324,10 +324,11 @@ export default function GastosPage() {
           errores.push(`Fila ${registro.fila}: autobús no encontrado (${autobusTexto || "vacío"})`);
           continue;
         }
+        const descripcion = valorATexto(registro.datos.descripcion ?? registro.datos.concepto);
         await crearGastoImportado(
           {
             fecha: fechaNormalizada,
-            descripcion: valorATexto(registro.datos.concepto),
+            descripcion,
             tipo: valorATexto(registro.datos.categoria),
             monto,
             sucursalId,
@@ -458,6 +459,7 @@ export default function GastosPage() {
           <ImportarExcel
             titulo="Importar gastos desde Excel"
             columnasEsperadas={columnasExcelGastos}
+            columnasOpcionales={["descripcion"]}
             onImport={manejarRegistrosImportados}
             onCancel={cerrarImportacion}
           />

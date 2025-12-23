@@ -2,6 +2,10 @@
   "functions": [
     {
       "codebase": "default",
+      "source": "functions",
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ],
       "disallowLegacyRuntimeConfig": true,
       "ignore": [
         "node_modules",
@@ -9,8 +13,7 @@
         "firebase-debug.log",
         "firebase-debug.*.log",
         "*.local"
-      ],
-      "source": "functions"
+      ]
     }
   ]
 }

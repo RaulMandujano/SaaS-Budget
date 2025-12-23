@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useMemo, useState } from "react";
+import { ChangeEvent, useCallback, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -26,6 +26,7 @@ interface RegistroProcesado extends RegistroExcel {
 interface Props {
   titulo: string;
   columnasEsperadas: string[];
+  columnasOpcionales?: string[];
   onImport: (registros: RegistroExcel[]) => void;
   onCancel?: () => void;
 }
@@ -33,13 +34,20 @@ interface Props {
 const etiquetasColumnas: Record<string, string> = {
   fecha: "Fecha",
   concepto: "Concepto",
+  descripcion: "Descripción",
   categoria: "Categoría",
   monto: "Monto",
   sucursal: "Sucursal",
   autobus: "Autobús",
 };
 
-export default function ImportarExcel({ columnasEsperadas, titulo, onImport, onCancel }: Props) {
+export default function ImportarExcel({
+  columnasEsperadas,
+  columnasOpcionales = [],
+  titulo,
+  onImport,
+  onCancel,
+}: Props) {
   const [archivoNombre, setArchivoNombre] = useState("");
   const [registros, setRegistros] = useState<RegistroProcesado[]>([]);
   const [errorGeneral, setErrorGeneral] = useState("");
@@ -48,6 +56,17 @@ export default function ImportarExcel({ columnasEsperadas, titulo, onImport, onC
 
   const totalErrores = useMemo(() => registros.filter((registro) => registro.error).length, [registros]);
   const totalValidos = useMemo(() => registros.filter((registro) => !registro.error).length, [registros]);
+
+  const etiquetaColumna = useCallback(
+    (columna: string, incluirOpcional: boolean) => {
+      const etiqueta = etiquetasColumnas[columna] ?? columna;
+      if (incluirOpcional && columnasOpcionales.includes(columna)) {
+        return `${etiqueta} (opcional)`;
+      }
+      return etiqueta;
+    },
+    [columnasOpcionales],
+  );
 
   const valorParaVista = (valor: unknown): string => {
     if (valor === undefined || valor === null) {
@@ -64,7 +83,7 @@ export default function ImportarExcel({ columnasEsperadas, titulo, onImport, onC
       { field: "fila", headerName: "Fila", width: 90 },
       ...columnasEsperadas.map((columna) => ({
         field: columna,
-        headerName: etiquetasColumnas[columna] ?? columna,
+        headerName: etiquetaColumna(columna, true),
         flex: 1,
         minWidth: 140,
       })),
@@ -83,7 +102,12 @@ export default function ImportarExcel({ columnasEsperadas, titulo, onImport, onC
       },
     ];
     return columnas;
-  }, [columnasEsperadas]);
+  }, [columnasEsperadas, etiquetaColumna]);
+
+  const columnasTexto = useMemo(
+    () => columnasEsperadas.map((columna) => etiquetaColumna(columna, true)).join(", "),
+    [columnasEsperadas, etiquetaColumna],
+  );
 
   const previewRows = useMemo(
     () =>
@@ -126,7 +150,10 @@ export default function ImportarExcel({ columnasEsperadas, titulo, onImport, onC
       const encabezadoRaw = filasRaw[0] as Array<unknown>;
       const encabezadosCanon = encabezadoRaw.map((celda) => canonizarEncabezadoExcel(celda));
 
-      const faltantes = columnasEsperadas.filter((columna) => !encabezadosCanon.includes(columna));
+      const columnasObligatorias = columnasEsperadas.filter(
+        (columna) => !columnasOpcionales.includes(columna),
+      );
+      const faltantes = columnasObligatorias.filter((columna) => !encabezadosCanon.includes(columna));
       if (faltantes.length) {
         throw new Error(
           `Faltan columnas obligatorias: ${faltantes.join(", ")}.`,
@@ -152,12 +179,15 @@ export default function ImportarExcel({ columnasEsperadas, titulo, onImport, onC
 
         columnasEsperadas.forEach((columna) => {
           const valor = datosFila[columna];
+          const esOpcional = columnasOpcionales.includes(columna);
           const estaVacio =
             valor === undefined ||
             valor === null ||
             (typeof valor === "string" && !valor.trim());
           if (estaVacio) {
-            erroresFila.push(`${etiquetasColumnas[columna] ?? columna} vacío`);
+            if (!esOpcional) {
+              erroresFila.push(`${etiquetasColumnas[columna] ?? columna} vacío`);
+            }
             return;
           }
           if (columna === "fecha") {
@@ -220,7 +250,7 @@ export default function ImportarExcel({ columnasEsperadas, titulo, onImport, onC
     <Stack spacing={2}>
       <Typography variant="h6">{titulo}</Typography>
       <Typography variant="body2" color="text.secondary">
-        El archivo debe incluir estas columnas en cualquier orden: {columnasEsperadas.join(", ")}.
+        El archivo debe incluir estas columnas en cualquier orden: {columnasTexto}.
         Las filas incompletas o con errores no se importarán.
       </Typography>
       <Stack direction="row" spacing={2} flexWrap="wrap">

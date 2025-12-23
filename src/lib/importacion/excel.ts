@@ -9,8 +9,8 @@ export const normalizarTextoExcel = (valor: unknown): string => {
 
 const aliasEncabezados: Record<string, string> = {
   fecha: "fecha",
-  concepto: "concepto",
-  descripcion: "concepto",
+  concepto: "descripcion",
+  descripcion: "descripcion",
   categoria: "categoria",
   tipo: "categoria",
   monto: "monto",
