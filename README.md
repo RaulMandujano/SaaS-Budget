@@ -1,6 +1,10 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-> Requires Node.js **20.9+** (Next.js 16). With `nvm`, run `nvm use` (reads `.nvmrc`) or `nvm install` to get the right version before `npm run build`.
+> Requires Node.js **20.x** for local development and Vercel deployments. With `nvm`, run `nvm use` (reads `.nvmrc`) or `nvm install` to get the right version before `npm run build`.
+
+## Vercel
+
+This repository pins Node.js to `20.x` in `package.json` so Vercel does not auto-upgrade the build to a newer major release. In the Vercel project settings, keep the Node.js version aligned to `20.x`.
 
 ## Getting Started
 
