@@ -1,5 +1,6 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
+import { ensureTenantInfrastructureForUser } from "./tenancy";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -44,6 +45,7 @@ export const createUserAdmin = functions.https.onCall(
 
       const callerData = callerSnap.data() || {};
       const callerRol = String(callerData.rol || "").toLowerCase();
+      // TODO: migrate to membership model
       const callerEmpresaId = String(callerData.empresaId || "");
       const esSuperadmin = callerRol === "superadmin";
       const esAdmin = callerRol === "admin";
@@ -117,8 +119,16 @@ export const createUserAdmin = functions.https.onCall(
         email: emailNormalizado,
         rol: rolNormalizado,
         activo: true,
+        // TODO: migrate to membership model
         empresaId,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      await ensureTenantInfrastructureForUser({
+        uid: userRecord.uid,
+        empresaId,
+        role: rolNormalizado,
+        status: "active",
       });
 
       // ---------------------------------------------------
@@ -130,7 +140,7 @@ export const createUserAdmin = functions.https.onCall(
         message: "Usuario creado correctamente.",
       };
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("❌ Error createUserAdmin:", error);
 
       // Firebase HttpsError ya formatea correctamente
@@ -141,7 +151,7 @@ export const createUserAdmin = functions.https.onCall(
       // Cualquier otro error desconocido
       throw new functions.https.HttpsError(
         "unknown",
-        error?.message || "Error desconocido al crear el usuario."
+        error instanceof Error ? error.message : "Error desconocido al crear el usuario."
       );
     }
   }

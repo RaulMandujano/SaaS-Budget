@@ -88,6 +88,7 @@ export const crearViajeSeguro = functions.https.onCall(
 
       const callerData = callerSnap.data() || {};
       const callerRol = String(callerData.rol || "").toLowerCase();
+      // TODO: migrate to membership model
       const callerEmpresaId = String(callerData.empresaId || "");
       const esSuperadmin = callerRol === "superadmin";
       const puedeCrear = callerRol === "admin" || callerRol === "operaciones" || esSuperadmin;
@@ -163,14 +164,14 @@ export const crearViajeSeguro = functions.https.onCall(
       return {
         id: ref.id,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof functions.https.HttpsError) {
         throw error;
       }
       console.error("❌ Error crearViajeSeguro:", error);
       throw new functions.https.HttpsError(
         "unknown",
-        error?.message || "Error desconocido al crear el viaje."
+        error instanceof Error ? error.message : "Error desconocido al crear el viaje."
       );
     }
   }

@@ -1,51 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
-
-import {
-  Container,
-  Box,
-  Paper,
-  Typography,
-  TextField,
-  Button,
-  CircularProgress,
-  Alert,
-} from "@mui/material";
+import { Box, Container } from "@mui/material";
+import LoginCard from "@/components/auth/LoginCard";
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [correo, setCorreo] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [cargando, setCargando] = useState(false);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setCargando(true);
-    try {
-      const cred = await signInWithEmailAndPassword(auth, correo, password);
-      const ref = doc(db, "usuarios", cred.user.uid);
-      const snap = await getDoc(ref);
-      const data = snap.data();
-      if (!data || data.activo === false) {
-        await signOut(auth);
-        setError("Tu cuenta no está activa o no existe en el sistema.");
-        return;
-      }
-      router.push("/dashboard");
-    } catch (err: any) {
-      setError("Credenciales incorrectas");
-    } finally {
-      setCargando(false);
-    }
-  };
-
   return (
     <Box
       sx={{
@@ -56,63 +14,7 @@ export default function LoginPage() {
       }}
     >
       <Container maxWidth="sm">
-        <Paper elevation={10} sx={{ p: 5, borderRadius: 4 }}>
-          <Box textAlign="center" mb={3}>
-            <Typography variant="h5" fontWeight="bold">
-              Panel Estrella Polar
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Sistema Corporativo de Control Operativo
-            </Typography>
-          </Box>
-
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-
-          <Box component="form" onSubmit={handleLogin}>
-            <TextField
-              fullWidth
-              label="Correo"
-              type="email"
-              margin="normal"
-              value={correo}
-              onChange={(e) => setCorreo(e.target.value)}
-              required
-            />
-
-            <TextField
-              fullWidth
-              label="Contraseña"
-              type="password"
-              margin="normal"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              size="large"
-              sx={{
-                mt: 3,
-                py: 1.5,
-                background: "linear-gradient(90deg, #1e3c72, #2a5298)",
-              }}
-              disabled={cargando}
-            >
-              {cargando ? (
-                <CircularProgress size={24} sx={{ color: "white" }} />
-              ) : (
-                "Iniciar Sesión"
-              )}
-            </Button>
-          </Box>
-        </Paper>
+        <LoginCard />
       </Container>
     </Box>
   );

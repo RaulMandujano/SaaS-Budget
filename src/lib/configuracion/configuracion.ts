@@ -24,7 +24,7 @@ export interface ConfiguracionGeneral {
 }
 
 export const configuracionDefault: ConfiguracionGeneral = {
-  nombreEmpresa: "Estrella Polar",
+  nombreEmpresa: "Smart Budget",
   logoUrl: "",
   moneda: "MXN",
   impuestosActivo: false,

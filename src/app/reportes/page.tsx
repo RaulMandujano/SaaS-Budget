@@ -50,7 +50,7 @@ export default function ReportesPage() {
   const [aplicarFiltros, setAplicarFiltros] = useState(false);
   const [correoDestino, setCorreoDestino] = useState("");
   const [enviandoCorreo, setEnviandoCorreo] = useState(false);
-  const nombreEmpresa = configuracion.nombreEmpresa || "Estrella Polar";
+  const nombreEmpresa = configuracion.nombreEmpresa || "Smart Budget";
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (usuario) => {

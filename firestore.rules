@@ -33,6 +33,22 @@ service cloud.firestore {
       return rolAuth() == "operaciones";
     }
 
+    function esSuperadmin() {
+      return rolAuth() == "superadmin";
+    }
+
+    function mismaEmpresaPath(empresaId) {
+      return empresaId == empresaIdAuth();
+    }
+
+    function puedeLeerEmpresaPath(empresaId) {
+      return isSignedIn() && (esSuperadmin() || mismaEmpresaPath(empresaId));
+    }
+
+    function puedeEscribirEmpresaPath(empresaId) {
+      return isSignedIn() && (esSuperadmin() || (rolAdmin() && mismaEmpresaPath(empresaId)));
+    }
+
     function puedeAccederEmpresa() {
       return isSignedIn() && (mismaEmpresaExistente() || mismaEmpresaNueva());
     }
@@ -44,7 +60,45 @@ service cloud.firestore {
     }
 
     match /empresas/{empresaId} {
-      allow read, write: if isSignedIn() && rolAdmin() && (mismaEmpresaExistente() || mismaEmpresaNueva());
+      allow read, write: if puedeEscribirEmpresaPath(empresaId);
+    }
+
+    match /empresas/{empresaId}/membresias/{uid} {
+      allow read: if puedeLeerEmpresaPath(empresaId) && (esSuperadmin() || rolAdmin() || request.auth.uid == uid);
+      allow write: if puedeEscribirEmpresaPath(empresaId);
+    }
+
+    match /empresas/{empresaId}/modulos/{moduleId} {
+      allow read: if puedeLeerEmpresaPath(empresaId);
+      allow write: if puedeEscribirEmpresaPath(empresaId);
+    }
+
+    match /empresas/{empresaId}/assets/{assetId} {
+      allow read: if puedeLeerEmpresaPath(empresaId);
+      allow write: if puedeEscribirEmpresaPath(empresaId);
+    }
+
+    match /empresas/{empresaId}/inventario/{itemId} {
+      allow read: if puedeLeerEmpresaPath(empresaId);
+      allow create, delete: if puedeEscribirEmpresaPath(empresaId);
+      allow update: if puedeLeerEmpresaPath(empresaId);
+    }
+
+    match /empresas/{empresaId}/dispositivos/{deviceId} {
+      allow read: if puedeLeerEmpresaPath(empresaId);
+      allow create, delete: if puedeEscribirEmpresaPath(empresaId);
+      allow update: if puedeLeerEmpresaPath(empresaId);
+    }
+
+    match /empresas/{empresaId}/mantenimientos/{ticketId} {
+      allow read: if puedeLeerEmpresaPath(empresaId);
+      allow create, update: if puedeLeerEmpresaPath(empresaId);
+      allow delete: if puedeEscribirEmpresaPath(empresaId);
+    }
+
+    match /empresas/{empresaId}/activityLogs/{logId} {
+      allow read, create: if puedeLeerEmpresaPath(empresaId);
+      allow update, delete: if puedeEscribirEmpresaPath(empresaId);
     }
 
     match /configuracion/{docId} {

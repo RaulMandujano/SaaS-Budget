@@ -36,11 +36,17 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.slackOAuthCallback = exports.slackWebhook = void 0;
+exports.slackOAuthCallback = exports.slackWebhook = exports.createUserAdmin = exports.crearViajeSeguro = exports.backfillMemberships = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 const crypto_1 = __importDefault(require("crypto"));
 const node_fetch_1 = __importDefault(require("node-fetch"));
+var backfillMemberships_1 = require("./backfillMemberships");
+Object.defineProperty(exports, "backfillMemberships", { enumerable: true, get: function () { return backfillMemberships_1.backfillMemberships; } });
+var crearViajeSeguro_1 = require("./crearViajeSeguro");
+Object.defineProperty(exports, "crearViajeSeguro", { enumerable: true, get: function () { return crearViajeSeguro_1.crearViajeSeguro; } });
+var createUserAdmin_1 = require("./createUserAdmin");
+Object.defineProperty(exports, "createUserAdmin", { enumerable: true, get: function () { return createUserAdmin_1.createUserAdmin; } });
 admin.initializeApp();
 const CATEGORIAS = ["Combustible", "Mantenimiento", "Peajes", "Sueldos", "Otros"];
 /* ===============================

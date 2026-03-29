@@ -2,6 +2,9 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import crypto from "crypto";
 import fetch from "node-fetch";
+export { backfillMemberships } from "./backfillMemberships";
+export { crearViajeSeguro } from "./crearViajeSeguro";
+export { createUserAdmin } from "./createUserAdmin";
 
 admin.initializeApp();
 

@@ -21,7 +21,7 @@ export const generarPdfGastos = async (gastos: GastoParaExportar[]): Promise<voi
     const doc = new jsPdfModule.default();
 
     doc.setFontSize(14);
-    doc.text("Reporte de Gastos - Estrella Polar", 105, 14, { align: "center" });
+    doc.text("Reporte de Gastos - Smart Budget", 105, 14, { align: "center" });
     doc.setFontSize(10);
     doc.text(
       `Fecha de generación: ${new Date().toLocaleString("es-ES")}`,

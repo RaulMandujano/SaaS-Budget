@@ -91,6 +91,7 @@ exports.crearViajeSeguro = functions.https.onCall(async (data, context) => {
         }
         const callerData = callerSnap.data() || {};
         const callerRol = String(callerData.rol || "").toLowerCase();
+        // TODO: migrate to membership model
         const callerEmpresaId = String(callerData.empresaId || "");
         const esSuperadmin = callerRol === "superadmin";
         const puedeCrear = callerRol === "admin" || callerRol === "operaciones" || esSuperadmin;
@@ -140,6 +141,6 @@ exports.crearViajeSeguro = functions.https.onCall(async (data, context) => {
             throw error;
         }
         console.error("❌ Error crearViajeSeguro:", error);
-        throw new functions.https.HttpsError("unknown", (error === null || error === void 0 ? void 0 : error.message) || "Error desconocido al crear el viaje.");
+        throw new functions.https.HttpsError("unknown", error instanceof Error ? error.message : "Error desconocido al crear el viaje.");
     }
 });

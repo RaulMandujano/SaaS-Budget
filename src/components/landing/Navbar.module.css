@@ -1,0 +1,89 @@
+.navbar {
+  background: rgba(248, 251, 255, 0.76);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  color: #0f172a;
+  transition: background 180ms ease, box-shadow 180ms ease;
+}
+
+.toolbar {
+  min-height: 78px;
+  display: flex;
+  gap: 24px;
+}
+
+.brand {
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.navLinks a {
+  color: #475569;
+  font-family: "Avenir Next", "Montserrat", "Segoe UI", sans-serif;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 0.6rem 0.85rem;
+  border-radius: 999px;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.navLinks a:hover {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.08);
+  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
+}
+
+.navLinks a:visited,
+.navLinks a:active,
+.navLinks a:focus {
+  text-decoration: none;
+}
+
+.navLinks a:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.28);
+  outline-offset: 2px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.loginButton {
+  border-radius: 16px;
+  padding: 0.8rem 1.25rem;
+  text-transform: none;
+  font-weight: 700;
+  background: linear-gradient(135deg, #0f172a 0%, #2563eb 100%);
+  box-shadow: none;
+  transition: transform 180ms ease, filter 180ms ease;
+}
+
+.loginButton:hover {
+  transform: scale(1.05);
+  box-shadow: none;
+}
+
+@media (max-width: 700px) {
+  .toolbar {
+    min-height: 74px;
+    gap: 14px;
+  }
+
+  .navLinks {
+    display: none;
+  }
+}

@@ -14,7 +14,7 @@ export default function Topbar() {
 
   return (
     <header className="flex items-center justify-between bg-white shadow px-6 py-4 sticky top-0 z-10">
-      <h1 className="text-xl font-semibold text-gray-800">Panel Estrella Polar</h1>
+      <h1 className="text-xl font-semibold text-gray-800">Panel Smart Budget</h1>
       <button
         onClick={cerrarSesion}
         className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"

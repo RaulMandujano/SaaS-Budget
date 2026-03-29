@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.createUserAdmin = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
+const tenancy_1 = require("./tenancy");
 if (!admin.apps.length) {
     admin.initializeApp();
 }
@@ -60,6 +61,7 @@ exports.createUserAdmin = functions.https.onCall(async (data, context) => {
         }
         const callerData = callerSnap.data() || {};
         const callerRol = String(callerData.rol || "").toLowerCase();
+        // TODO: migrate to membership model
         const callerEmpresaId = String(callerData.empresaId || "");
         const esSuperadmin = callerRol === "superadmin";
         const esAdmin = callerRol === "admin";
@@ -105,8 +107,15 @@ exports.createUserAdmin = functions.https.onCall(async (data, context) => {
             email: emailNormalizado,
             rol: rolNormalizado,
             activo: true,
+            // TODO: migrate to membership model
             empresaId,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await (0, tenancy_1.ensureTenantInfrastructureForUser)({
+            uid: userRecord.uid,
+            empresaId,
+            role: rolNormalizado,
+            status: "active",
         });
         // ---------------------------------------------------
         // 5️⃣ Respuesta
@@ -124,6 +133,6 @@ exports.createUserAdmin = functions.https.onCall(async (data, context) => {
             throw error;
         }
         // Cualquier otro error desconocido
-        throw new functions.https.HttpsError("unknown", (error === null || error === void 0 ? void 0 : error.message) || "Error desconocido al crear el usuario.");
+        throw new functions.https.HttpsError("unknown", error instanceof Error ? error.message : "Error desconocido al crear el usuario.");
     }
 });
